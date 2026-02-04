@@ -330,35 +330,37 @@ class AutonomousAgent {
    * Self-evaluation and improvement
    */
   async selfEvaluate() {
-    // Check past posts performance
-    const pastPosts = await this.db.getRecentPosts(24); // Last 24 hours
-    
-    let totalUpvotes = 0;
-    let totalEngagement = 0;
-
-    for (const post of pastPosts) {
-      const current = await this.forum.getPost(post.id);
-      totalUpvotes += current.upvotes;
-      totalEngagement += current.commentCount;
-    }
-
-    const avgUpvotes = pastPosts.length > 0 ? totalUpvotes / pastPosts.length : 0;
-    
-    // If performance is low, adjust algorithms
-    if (avgUpvotes < 3 && pastPosts.length >= 3) {
-      await this.adjustQualityThreshold('increase');
-      this.stats.improvements++;
+    try {
+      // Get recent posts from DATABASE (not API)
+      const pastPosts = await this.db.pool.query(`
+        SELECT * FROM autonomy_log 
+        WHERE action = 'FORUM_POST' 
+          AND outcome = 'SUCCESS'
+          AND timestamp > NOW() - INTERVAL '24 hours'
+        ORDER BY timestamp DESC
+      `);
       
-      this.logger.info('🔧 Self-improvement: Increased quality threshold');
-    }
-
-    await this.logAutonomousAction({
-      action: 'SELF_EVALUATION',
-      metrics: {
-        avgUpvotes,
-        totalPosts: pastPosts.length
+      if (pastPosts.rows.length === 0) {
+        this.logger.info('📊 Self-evaluation: No posts in last 24h');
+        return;
       }
-    });
+      
+      // Simple self-evaluation without fetching post details
+      const postCount = pastPosts.rows.length;
+      
+      this.logger.info(`📊 Self-evaluation: ${postCount} posts in last 24h`);
+      
+      await this.logAutonomousAction({
+        action: 'SELF_EVALUATION',
+        metrics: {
+          postsLast24h: postCount
+        }
+      });
+      
+    } catch (error) {
+      this.logger.error('Self-evaluation failed:', error.message);
+      // Don't crash - just skip
+    }
   }
 
   /**
