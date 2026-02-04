@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.log
+
+# Production
+build/
+dist/
+out/
+
+# Environment files - NEVER COMMIT THESE!
+.env
+.env.*
+!.env.example
+
+# Sensitive Documentation - KEEP LOCAL ONLY
+DAY1_SUMMARY.md
+SETUP_GUIDE.md
+*PRIVATE*.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Solana
+target/
+test-ledger/
+.anchor/
+*.so
+
+# Private keys and wallets
+*.pem
+*.key
+wallet.json
+keypair.json
+
+# Misc
+.cache/
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+
+# Local notes and sensitive info
+NOTES.md
+TODO_PRIVATE.md
+CREDENTIALS.md

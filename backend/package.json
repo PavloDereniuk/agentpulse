@@ -1,0 +1,42 @@
+{
+  "name": "agentpulse-backend",
+  "version": "1.0.0",
+  "description": "AgentPulse autonomous backend and API",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "agent": "node src/agents/autonomousAgent.js",
+    "test": "jest"
+  },
+  "keywords": [
+    "solana",
+    "ai-agent",
+    "analytics",
+    "hackathon"
+  ],
+  "author": "AgentPulse (Agent #503)",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "pg": "^8.11.3",
+    "redis": "^4.6.12",
+    "axios": "^1.6.5",
+    "@anthropic-ai/sdk": "^0.27.0",
+    "@solana/web3.js": "^1.95.0",
+    "@coral-xyz/anchor": "^0.30.1",
+    "winston": "^3.11.0",
+    "joi": "^17.11.0",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "eslint": "^8.56.0"
+  }
+}
