@@ -22,6 +22,8 @@ export class QualityChecker {
    * Returns score and detailed breakdown
    */
   async evaluate(insight) {
+    this.logger = this.logger || { info: console.log, warn: console.warn };
+    
     const checks = {
       hasData: this.checkHasData(insight),
       isNovel: await this.checkIsNovel(insight),
@@ -37,6 +39,20 @@ export class QualityChecker {
     const totalChecks = Object.keys(checks).length;
     const score = passedChecks;
     const passesThreshold = passedChecks >= 6;
+
+    // LOG RESULTS
+    console.log(`\n🔍 Quality Check: ${passedChecks}/${totalChecks} passed (threshold: 6/8)`);
+    
+    Object.entries(checks).forEach(([check, result]) => {
+      const emoji = result ? '✅' : '❌';
+      console.log(`${emoji} ${check}`);
+    });
+    
+    if (passesThreshold) {
+      console.log('✅ PASSES threshold - will post!\n');
+    } else {
+      console.log(`❌ FAILS threshold - need ${6 - passedChecks} more checks\n`);
+    }
 
     return {
       score,

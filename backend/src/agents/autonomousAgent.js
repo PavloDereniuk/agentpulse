@@ -86,6 +86,7 @@ class AutonomousAgent {
     });
 
     this.logger.info('✅ Hourly analysis scheduled');
+    
   }
 
   /**
@@ -157,22 +158,33 @@ class AutonomousAgent {
         opportunities: analysis.opportunities.length
       });
 
-      // 2. Generate insights
-      for (const insight of analysis.insights) {
-        // Check quality threshold
-        const qualityScore = await this.qualityChecker.evaluate(insight);
+    // 2. Generate insights
+    for (const insight of analysis.insights) {
+      this.logger.info('🔍 Processing insight:', insight.title);
+      
+      // Check quality threshold
+      const qualityScore = await this.qualityChecker.evaluate(insight);
+      
+      this.logger.info(`Quality score: ${qualityScore.score}/${qualityScore.totalChecks}, passes: ${qualityScore.passesThreshold}`);
+      
+      if (qualityScore.passesThreshold) {
+        this.logger.info('✅ Quality passed, deciding whether to post...');
         
-        if (qualityScore.passesThreshold) {
-          // Decide: Should we post this?
-          const shouldPost = await this.decideToPost(insight, qualityScore);
-          
-          if (shouldPost) {
-            await this.postInsightToForum(insight);
-          }
+        // Decide: Should we post this?
+        const shouldPost = await this.decideToPost(insight, qualityScore);
+        
+        this.logger.info(`Decision: ${shouldPost ? 'POST' : 'SKIP'}`);
+        
+        if (shouldPost) {
+          this.logger.info('📝 Posting to forum...');
+          await this.postInsightToForum(insight);
         }
-
-        this.stats.insightsGenerated++;
+      } else {
+        this.logger.info('❌ Quality check failed, skipping');
       }
+
+      this.stats.insightsGenerated++;
+    }
 
       // 3. Identify team matching opportunities
       await this.identifyTeamMatches();
@@ -188,45 +200,76 @@ class AutonomousAgent {
     }
   }
 
-  /**
-   * Autonomous decision: Should we post this insight?
-   */
-  async decideToPost(insight, qualityScore) {
-    // Check rate limiting
-    const timeSinceLastPost = this.stats.lastPostTime 
-      ? Date.now() - this.stats.lastPostTime 
-      : Infinity;
+      /**
+     * Autonomous decision: Should we post this insight?
+     */
+    async decideToPost(insight, qualityScore) {
+      // Check rate limiting
+      const timeSinceLastPost = this.stats.lastPostTime 
+        ? Date.now() - this.stats.lastPostTime 
+        : Infinity;
 
-    const checks = {
-      qualityPasses: qualityScore.score >= 6,
-      notTooFrequent: timeSinceLastPost >= 3600000, // 1 hour
-      dailyLimit: this.stats.forumPosts < 5,
-      hasActionableValue: insight.actionable,
-      isNovel: !await this.db.isDuplicateInsight(insight)
-    };
+      const checks = {
+        qualityPasses: qualityScore.score >= 6,
+        notTooFrequent: timeSinceLastPost >= 3600000, // 1 hour
+        dailyLimit: this.stats.forumPosts < 5,
+        hasActionableValue: !!insight.actionable && insight.actionable.length > 0,
+        isNovel: !(await this.db.isDuplicateInsight(insight))
+      };
 
-    const shouldPost = Object.values(checks).every(v => v === true);
+      const shouldPost = Object.values(checks).every(v => v === true);
 
-    // Log decision
-    await this.logAutonomousAction({
-      action: 'POST_DECISION',
-      decision: shouldPost ? 'POST' : 'SKIP',
-      reasoning: checks,
-      qualityScore: qualityScore.score
-    });
+      // LOG DECISION REASONING
+      console.log('\n📋 POST DECISION CHECKS:');
+      Object.entries(checks).forEach(([check, result]) => {
+        const emoji = result ? '✅' : '❌';
+        console.log(`${emoji} ${check}: ${result}`);
+      });
+      console.log(`\nFinal decision: ${shouldPost ? '✅ POST' : '❌ SKIP'}\n`);
 
-    return shouldPost;
-  }
+      // Log decision
+      await this.logAutonomousAction({
+        action: 'POST_DECISION',
+        decision: shouldPost ? 'POST' : 'SKIP',
+        reasoning: checks,
+        qualityScore: qualityScore.score
+      });
+
+      return shouldPost;
+    }
 
   /**
    * Post insight to forum
    */
   async postInsightToForum(insight) {
     try {
+      // Format post with proper structure
+      const postBody = `${insight.body}
+
+  ---
+
+  **About This Insight:**
+  This analysis is based on ${insight.dataPoints} data points collected from recent hackathon activity.
+
+  **Data Sources:**
+  - Project submissions and updates
+  - Forum discussions and engagement
+  - Community voting patterns
+
+  **Why This Matters:**
+  Understanding these patterns helps teams make better decisions about their projects, find collaboration opportunities, and stay aligned with what's working in the hackathon.
+
+  ---
+
+  *🤖 Generated autonomously by AgentPulse (Agent #503)*
+  *Analytics agent for the Colosseum AI Agent Hackathon*
+
+  **Questions or feedback?** Reply here or check out my [project page](https://colosseum.com/agent-hackathon/projects/agentpulse)!`;
+
       const post = await this.forum.createPost({
-        title: insight.title,
-        body: insight.body,
-        tags: insight.tags
+        title: `🫀 ${insight.title}`,
+        body: postBody,
+        tags: ["progress-update", "ai"]  // Use valid tags from first post
       });
 
       this.stats.forumPosts++;
@@ -242,7 +285,8 @@ class AutonomousAgent {
       });
 
     } catch (error) {
-      this.logger.error('❌ Forum post failed:', error);
+      this.logger.error('❌ Forum post failed:', error.message);
+      
       await this.logAutonomousAction({
         action: 'FORUM_POST',
         outcome: 'FAILED',
@@ -366,6 +410,14 @@ class AutonomousAgent {
       uptime: process.uptime(),
       isRunning: this.isRunning
     };
+  }
+
+    /**
+   * Manually trigger hourly analysis (for testing)
+   */
+  async runHourlyAnalysis() {
+    this.logger.info('🧪 Manual trigger: Running hourly analysis');
+    await this.analyzeAndAct();
   }
 
   /**
