@@ -326,18 +326,18 @@ class AutonomousAgent {
     this.stats.predictions += predictions.length;
   }
 
-  /**
+    /**
    * Self-evaluation and improvement
    */
   async selfEvaluate() {
     try {
-      // Get recent posts from DATABASE (not API)
+      // Get recent posts from DATABASE
       const pastPosts = await this.db.pool.query(`
         SELECT * FROM autonomy_log 
         WHERE action = 'FORUM_POST' 
           AND outcome = 'SUCCESS'
-          AND timestamp > NOW() - INTERVAL '24 hours'
-        ORDER BY timestamp DESC
+          AND created_at > NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC
       `);
       
       if (pastPosts.rows.length === 0) {
@@ -345,7 +345,6 @@ class AutonomousAgent {
         return;
       }
       
-      // Simple self-evaluation without fetching post details
       const postCount = pastPosts.rows.length;
       
       this.logger.info(`📊 Self-evaluation: ${postCount} posts in last 24h`);
@@ -359,7 +358,7 @@ class AutonomousAgent {
       
     } catch (error) {
       this.logger.error('Self-evaluation failed:', error.message);
-      // Don't crash - just skip
+      // Don't crash - just continue
     }
   }
 
