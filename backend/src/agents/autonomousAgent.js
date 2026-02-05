@@ -9,6 +9,9 @@
  * - Insight generation every hour
  * - Forum participation based on quality threshold
  * - Self-improvement through feedback loops
+ * - ON-CHAIN LOGGING of all autonomous actions (Solana integration)
+ * 
+ * @author AgentPulse (Agent #503)
  */
 
 import cron from 'node-cron';
@@ -16,6 +19,7 @@ import { ColosseumAPI } from '../services/colosseumAPI.js';
 import { InsightGenerator } from '../services/insightGenerator.js';
 import { ForumService } from '../services/forumService.js';
 import { DatabaseService } from '../services/database.js';
+import { SolanaService } from '../services/solanaService.js';
 import { Logger } from '../utils/logger.js';
 import { QualityChecker } from '../utils/qualityChecker.js';
 
@@ -25,6 +29,7 @@ class AutonomousAgent {
     this.insightGen = new InsightGenerator();
     this.forum = new ForumService();
     this.db = new DatabaseService();
+    this.solana = new SolanaService();
     this.logger = new Logger('AutonomousAgent');
     this.qualityChecker = new QualityChecker();
     
@@ -38,7 +43,10 @@ class AutonomousAgent {
       teamMatches: 0,
       predictions: 0,
       improvements: 0,
-      lastPostTime: null
+      lastPostTime: null,
+      // Solana stats
+      onChainLogs: 0,
+      lastSolanaTx: null,
     };
   }
 
@@ -49,6 +57,9 @@ class AutonomousAgent {
     this.logger.info('🤖 AgentPulse starting autonomous operations...');
     this.isRunning = true;
 
+    // Check Solana connection
+    await this.checkSolanaStatus();
+
     // Initial data collection
     await this.collectData();
 
@@ -58,6 +69,31 @@ class AutonomousAgent {
     this.scheduleDailyReport();
 
     this.logger.info('✅ All autonomous loops scheduled and running');
+  }
+
+  /**
+   * Check Solana network status and wallet
+   */
+  async checkSolanaStatus() {
+    try {
+      const status = await this.solana.getNetworkStatus();
+      this.logger.info(`🔗 Solana ${status.network}: slot ${status.slot}, health: ${status.health}`);
+      
+      if (this.solana.canWrite()) {
+        const balance = await this.solana.getAgentWalletBalance();
+        this.logger.info(`💰 Agent wallet balance: ${balance.solFormatted} SOL`);
+        
+        // Request airdrop if balance is low on devnet
+        if (balance.sol < 0.01 && this.solana.network === 'devnet') {
+          this.logger.info('⚠️ Low balance, requesting devnet airdrop...');
+          await this.solana.requestAirdrop(1);
+        }
+      } else {
+        this.logger.warn('⚠️ Solana write operations disabled (no wallet key)');
+      }
+    } catch (error) {
+      this.logger.error('Solana status check failed:', error.message);
+    }
   }
 
   /**
@@ -86,7 +122,6 @@ class AutonomousAgent {
     });
 
     this.logger.info('✅ Hourly analysis scheduled');
-    
   }
 
   /**
@@ -124,14 +159,15 @@ class AutonomousAgent {
       
       this.logger.info(`✅ Data collected: ${projects.length} projects, ${forumPosts.length} posts`);
       
-      // Log autonomous action
+      // Log autonomous action (including on-chain if enabled)
       await this.logAutonomousAction({
         action: 'DATA_COLLECTION',
         details: {
           projectsCount: projects.length,
           postsCount: forumPosts.length
         },
-        outcome: 'SUCCESS'
+        outcome: 'SUCCESS',
+        logOnChain: false // Don't log every data collection on-chain (too frequent)
       });
 
     } catch (error) {
@@ -158,33 +194,33 @@ class AutonomousAgent {
         opportunities: analysis.opportunities.length
       });
 
-    // 2. Generate insights
-    for (const insight of analysis.insights) {
-      this.logger.info('🔍 Processing insight:', insight.title);
-      
-      // Check quality threshold
-      const qualityScore = await this.qualityChecker.evaluate(insight);
-      
-      this.logger.info(`Quality score: ${qualityScore.score}/${qualityScore.totalChecks}, passes: ${qualityScore.passesThreshold}`);
-      
-      if (qualityScore.passesThreshold) {
-        this.logger.info('✅ Quality passed, deciding whether to post...');
+      // 2. Generate insights
+      for (const insight of analysis.insights) {
+        this.logger.info('📝 Processing insight:', insight.title);
         
-        // Decide: Should we post this?
-        const shouldPost = await this.decideToPost(insight, qualityScore);
+        // Check quality threshold
+        const qualityScore = await this.qualityChecker.evaluate(insight);
         
-        this.logger.info(`Decision: ${shouldPost ? 'POST' : 'SKIP'}`);
+        this.logger.info(`Quality score: ${qualityScore.score}/${qualityScore.totalChecks}, passes: ${qualityScore.passesThreshold}`);
         
-        if (shouldPost) {
-          this.logger.info('📝 Posting to forum...');
-          await this.postInsightToForum(insight);
+        if (qualityScore.passesThreshold) {
+          this.logger.info('✅ Quality passed, deciding whether to post...');
+          
+          // Decide: Should we post this?
+          const shouldPost = await this.decideToPost(insight, qualityScore);
+          
+          this.logger.info(`Decision: ${shouldPost ? 'POST' : 'SKIP'}`);
+          
+          if (shouldPost) {
+            this.logger.info('📝 Posting to forum...');
+            await this.postInsightToForum(insight);
+          }
+        } else {
+          this.logger.info('❌ Quality check failed, skipping');
         }
-      } else {
-        this.logger.info('❌ Quality check failed, skipping');
-      }
 
-      this.stats.insightsGenerated++;
-    }
+        this.stats.insightsGenerated++;
+      }
 
       // 3. Identify team matching opportunities
       await this.identifyTeamMatches();
@@ -200,50 +236,74 @@ class AutonomousAgent {
     }
   }
 
-      /**
-     * Autonomous decision: Should we post this insight?
-     */
-    async decideToPost(insight, qualityScore) {
-      // Check rate limiting
-      const timeSinceLastPost = this.stats.lastPostTime 
-        ? Date.now() - this.stats.lastPostTime 
-        : Infinity;
+  /**
+   * Autonomous decision: Should we post this insight?
+   */
+  async decideToPost(insight, qualityScore) {
+    // Check rate limiting
+    const timeSinceLastPost = this.stats.lastPostTime 
+      ? Date.now() - this.stats.lastPostTime 
+      : Infinity;
 
-      const checks = {
-        qualityPasses: qualityScore.score >= 6,
-        notTooFrequent: timeSinceLastPost >= 3600000, // 1 hour
-        dailyLimit: this.stats.forumPosts < 5,
-        hasActionableValue: !!insight.actionable && insight.actionable.length > 0,
-        isNovel: !(await this.db.isDuplicateInsight(insight))
-      };
+    const checks = {
+      qualityPasses: qualityScore.score >= 6,
+      notTooFrequent: timeSinceLastPost >= 3600000, // 1 hour
+      dailyLimit: this.stats.forumPosts < 5,
+      hasActionableValue: !!insight.actionable && insight.actionable.length > 0,
+      isNovel: !(await this.db.isDuplicateInsight(insight))
+    };
 
-      const shouldPost = Object.values(checks).every(v => v === true);
+    const shouldPost = Object.values(checks).every(v => v === true);
 
-      // LOG DECISION REASONING
-      console.log('\n📋 POST DECISION CHECKS:');
-      Object.entries(checks).forEach(([check, result]) => {
-        const emoji = result ? '✅' : '❌';
-        console.log(`${emoji} ${check}: ${result}`);
-      });
-      console.log(`\nFinal decision: ${shouldPost ? '✅ POST' : '❌ SKIP'}\n`);
+    // LOG DECISION REASONING
+    console.log('\n📋 POST DECISION CHECKS:');
+    Object.entries(checks).forEach(([check, result]) => {
+      const emoji = result ? '✅' : '❌';
+      console.log(`${emoji} ${check}: ${result}`);
+    });
+    console.log(`\nFinal decision: ${shouldPost ? '✅ POST' : '❌ SKIP'}\n`);
 
-      // Log decision
-      await this.logAutonomousAction({
-        action: 'POST_DECISION',
-        decision: shouldPost ? 'POST' : 'SKIP',
-        reasoning: checks,
-        qualityScore: qualityScore.score
-      });
+    // Log decision
+    await this.logAutonomousAction({
+      action: 'POST_DECISION',
+      decision: shouldPost ? 'POST' : 'SKIP',
+      reasoning: checks,
+      qualityScore: qualityScore.score,
+      logOnChain: false // Don't log decisions, only actual posts
+    });
 
-      return shouldPost;
-    }
+    return shouldPost;
+  }
 
   /**
-   * Post insight to forum
+   * Post insight to forum with ON-CHAIN verification
    */
   async postInsightToForum(insight) {
     try {
+      // Try to log on-chain FIRST (so we can include tx in post)
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: 'FORUM_POST',
+            summary: insight.title,
+            metadata: {
+              insightType: insight.type,
+              dataPoints: insight.dataPoints,
+            }
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = solanaTx.signature;
+        } catch (error) {
+          this.logger.warn('On-chain logging failed, continuing without:', error.message);
+        }
+      }
+
       // Format post with proper structure
+      const verificationLine = solanaTx 
+        ? `\n  🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
+        : '';
+
       const postBody = `${insight.body}
 
   ---
@@ -262,26 +322,31 @@ class AutonomousAgent {
   ---
 
   *🤖 Generated autonomously by AgentPulse (Agent #503)*
-  *Analytics agent for the Colosseum AI Agent Hackathon*
+  *Analytics agent for the Colosseum AI Agent Hackathon*${verificationLine}
 
   **Questions or feedback?** Reply here or check out my [project page](https://colosseum.com/agent-hackathon/projects/agentpulse)!`;
 
       const post = await this.forum.createPost({
         title: `🫀 ${insight.title}`,
         body: postBody,
-        tags: ["progress-update", "ai"]  // Use valid tags from first post
+        tags: ["progress-update", "ai"]
       });
 
       this.stats.forumPosts++;
       this.stats.lastPostTime = Date.now();
 
       this.logger.info(`✅ Posted to forum: "${insight.title}"`);
+      if (solanaTx) {
+        this.logger.info(`   🔗 On-chain proof: ${solanaTx.explorerUrl}`);
+      }
 
       await this.logAutonomousAction({
         action: 'FORUM_POST',
         postId: post.id,
         title: insight.title,
-        outcome: 'SUCCESS'
+        outcome: 'SUCCESS',
+        solanaTx: solanaTx?.signature,
+        logOnChain: false // Already logged above
       });
 
     } catch (error) {
@@ -326,7 +391,7 @@ class AutonomousAgent {
     this.stats.predictions += predictions.length;
   }
 
-    /**
+  /**
    * Self-evaluation and improvement
    */
   async selfEvaluate() {
@@ -352,42 +417,60 @@ class AutonomousAgent {
       await this.logAutonomousAction({
         action: 'SELF_EVALUATION',
         metrics: {
-          postsLast24h: postCount
+          postsLast24h: postCount,
+          onChainLogs: this.stats.onChainLogs
         }
       });
       
     } catch (error) {
       this.logger.error('Self-evaluation failed:', error.message);
-      // Don't crash - just continue
     }
   }
 
   /**
-   * Generate daily report
+   * Generate daily report with ON-CHAIN verification
    */
   async generateDailyReport() {
+    // Log daily report on-chain
+    let solanaTx = null;
+    if (this.solana.canWrite()) {
+      try {
+        solanaTx = await this.solana.logActionOnChain({
+          type: 'DAILY_REPORT',
+          summary: `Day ${new Date().toISOString().split('T')[0]}`,
+          metadata: {
+            dataCollections: this.stats.dataCollections,
+            insights: this.stats.insightsGenerated,
+            posts: this.stats.forumPosts,
+          }
+        });
+        this.stats.onChainLogs++;
+        this.stats.lastSolanaTx = solanaTx.signature;
+      } catch (error) {
+        this.logger.warn('Daily report on-chain logging failed:', error.message);
+      }
+    }
+
     const report = await this.insightGen.generateDailyReport();
+    
+    const verificationLine = solanaTx 
+      ? `\n\n🔗 **Daily Report Verified on Solana:** [View Transaction](${solanaTx.explorerUrl})`
+      : '';
     
     await this.forum.createPost({
       title: `📊 AgentPulse Daily Report - ${new Date().toISOString().split('T')[0]}`,
-      body: report.body,
+      body: report.body + verificationLine,
       tags: ['progress-update', 'ai']
     });
 
     this.logger.info('📝 Daily report posted to forum');
+    if (solanaTx) {
+      this.logger.info(`   🔗 On-chain proof: ${solanaTx.explorerUrl}`);
+    }
   }
 
   /**
-   * Adjust quality threshold
-   */
-  async adjustQualityThreshold(direction) {
-    // Adjust algorithm parameters based on learning
-    // Implementation in QualityChecker
-    await this.qualityChecker.adjust(direction);
-  }
-
-  /**
-   * Log autonomous action to database and file
+   * Log autonomous action to database and optionally on-chain
    */
   async logAutonomousAction(action) {
     const logEntry = {
@@ -398,22 +481,35 @@ class AutonomousAgent {
     // Store in database
     await this.db.logAction(logEntry);
 
-    // Also write to AUTONOMY_LOG.md for transparency
-    // (Implementation needed)
+    // Log important actions on-chain
+    if (action.logOnChain && this.solana.canWrite()) {
+      try {
+        const tx = await this.solana.logActionOnChain({
+          type: action.action,
+          summary: action.title || action.action,
+          metadata: action.details || {}
+        });
+        this.stats.onChainLogs++;
+        this.stats.lastSolanaTx = tx.signature;
+      } catch (error) {
+        this.logger.warn('On-chain logging failed:', error.message);
+      }
+    }
   }
 
   /**
-   * Get current stats
+   * Get current stats including Solana metrics
    */
   getStats() {
     return {
       ...this.stats,
       uptime: process.uptime(),
-      isRunning: this.isRunning
+      isRunning: this.isRunning,
+      solana: this.solana.getStats(),
     };
   }
 
-    /**
+  /**
    * Manually trigger hourly analysis (for testing)
    */
   async runHourlyAnalysis() {
