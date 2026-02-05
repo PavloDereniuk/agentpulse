@@ -74,6 +74,9 @@ class AutonomousAgent {
     // Initial data collection
     await this.collectData();
 
+    // Load persisted stats from database
+    await this.loadStatsFromDB();
+
     // Schedule autonomous loops
     this.scheduleDataCollection();
     this.scheduleHourlyAnalysis();
@@ -229,6 +232,30 @@ class AutonomousAgent {
       });
     }
   }
+
+  /**
+ * Load stats from database on startup
+ */
+async loadStatsFromDB() {
+  try {
+    // Get counts from database
+    const [posts, comments, votes, logs] = await Promise.all([
+      this.db.pool.query(`SELECT COUNT(*) FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`),
+      this.db.pool.query(`SELECT COUNT(*) FROM comment_responses WHERE status = 'responded'`),
+      this.db.pool.query(`SELECT COUNT(*) FROM project_votes`),
+      this.db.pool.query(`SELECT COUNT(*) FROM autonomy_log WHERE action LIKE '%SOLANA%' OR details::text LIKE '%solanaTx%'`),
+    ]);
+
+    this.stats.forumPosts = parseInt(posts.rows[0]?.count || 0);
+    this.stats.commentResponses = parseInt(comments.rows[0]?.count || 0);
+    this.stats.votesGiven = parseInt(votes.rows[0]?.count || 0);
+    this.stats.onChainLogs = parseInt(logs.rows[0]?.count || 0);
+
+    this.logger.info(`📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.votesGiven} votes`);
+  } catch (error) {
+    this.logger.warn('Could not load stats from DB:', error.message);
+  }
+}
 
   /**
    * Evaluate projects and vote for quality ones
