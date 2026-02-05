@@ -34,7 +34,12 @@ logger.info("✅ Solana service initialized");
 // Middleware
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "*",
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://agentpulse-frontend.vercel.app",
+      "https://agentpulse.vercel.app"
+    ],
   }),
 );
 app.use(express.json());
