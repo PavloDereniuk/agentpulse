@@ -233,25 +233,44 @@ class AutonomousAgent {
     }
   }
 
-  /**
+/**
  * Load stats from database on startup
  */
 async loadStatsFromDB() {
   try {
-    // Get counts from database
-    const [posts, comments, votes, logs] = await Promise.all([
-      this.db.pool.query(`SELECT COUNT(*) FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`),
-      this.db.pool.query(`SELECT COUNT(*) FROM comment_responses WHERE status = 'responded'`),
-      this.db.pool.query(`SELECT COUNT(*) FROM project_votes`),
-      this.db.pool.query(`SELECT COUNT(*) FROM autonomy_log WHERE action LIKE '%SOLANA%' OR details::text LIKE '%solanaTx%'`),
-    ]);
+    // Forum posts from autonomy_log
+    try {
+      const posts = await this.db.pool.query(
+        `SELECT COUNT(*) FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`
+      );
+      this.stats.forumPosts = parseInt(posts.rows[0]?.count || 0);
+    } catch (e) { /* table may not exist */ }
 
-    this.stats.forumPosts = parseInt(posts.rows[0]?.count || 0);
-    this.stats.commentResponses = parseInt(comments.rows[0]?.count || 0);
-    this.stats.votesGiven = parseInt(votes.rows[0]?.count || 0);
-    this.stats.onChainLogs = parseInt(logs.rows[0]?.count || 0);
+    // Comment responses
+    try {
+      const comments = await this.db.pool.query(
+        `SELECT COUNT(*) FROM comment_responses WHERE status = 'responded'`
+      );
+      this.stats.commentResponses = parseInt(comments.rows[0]?.count || 0);
+    } catch (e) { /* table may not exist */ }
 
-    this.logger.info(`📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.votesGiven} votes`);
+    // Votes
+    try {
+      const votes = await this.db.pool.query(
+        `SELECT COUNT(*) FROM project_votes`
+      );
+      this.stats.votesGiven = parseInt(votes.rows[0]?.count || 0);
+    } catch (e) { /* table may not exist */ }
+
+    // On-chain logs
+    try {
+      const logs = await this.db.pool.query(
+        `SELECT COUNT(*) FROM autonomy_log WHERE details::text LIKE '%solanaTx%'`
+      );
+      this.stats.onChainLogs = parseInt(logs.rows[0]?.count || 0);
+    } catch (e) { /* table may not exist */ }
+
+    this.logger.info(`📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.votesGiven} votes, ${this.stats.onChainLogs} on-chain logs`);
   } catch (error) {
     this.logger.warn('Could not load stats from DB:', error.message);
   }
