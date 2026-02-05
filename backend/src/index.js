@@ -292,6 +292,116 @@ app.post("/api/trigger-analysis", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/trigger-comments
+ * Manually trigger comment response cycle
+ */
+app.post("/api/trigger-comments", async (req, res) => {
+  if (!agent) {
+    return res.status(503).json({ error: "Agent not running" });
+  }
+
+  try {
+    logger.info("рџ§Є Manual comment response trigger requested");
+    await agent.runCommentResponses();
+    res.json({
+      success: true,
+      message: "Comment responses triggered",
+      stats: agent.getStats(),
+    });
+  } catch (error) {
+    logger.error("Manual comment response failed:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/trigger-voting
+ * Manually trigger voting cycle
+ */
+app.post("/api/trigger-voting", async (req, res) => {
+  if (!agent) {
+    return res.status(503).json({ error: "Agent not running" });
+  }
+
+  try {
+    logger.info("рџ§Є Manual voting trigger requested");
+    await agent.runVoting();
+    res.json({
+      success: true,
+      message: "Voting cycle triggered",
+      stats: agent.getStats(),
+    });
+  } catch (error) {
+    logger.error("Manual voting failed:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/votes
+ * Get voting history and statistics
+ */
+app.get("/api/votes", async (req, res) => {
+  try {
+    const stats = agent?.getStats();
+    
+    // Get recent votes from database
+    const result = await db.pool.query(`
+      SELECT * FROM project_votes 
+      ORDER BY created_at DESC 
+      LIMIT 20
+    `);
+    
+    res.json({
+      stats: {
+        projectsEvaluated: stats?.projectsEvaluated || 0,
+        votesGiven: stats?.votesGiven || 0,
+        lastVotingTime: stats?.lastVotingTime,
+      },
+      recentVotes: result.rows,
+    });
+  } catch (error) {
+    res.json({
+      stats: agent?.getStats() || {},
+      recentVotes: [],
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/comment-responses
+ * Get comment response history
+ */
+app.get("/api/comment-responses", async (req, res) => {
+  try {
+    const stats = agent?.getStats();
+    
+    // Get recent responses from database
+    const result = await db.pool.query(`
+      SELECT * FROM comment_responses 
+      WHERE status = 'responded'
+      ORDER BY created_at DESC 
+      LIMIT 20
+    `);
+    
+    res.json({
+      stats: {
+        commentResponses: stats?.commentResponses || 0,
+        lastCommentCheckTime: stats?.lastCommentCheckTime,
+      },
+      recentResponses: result.rows,
+    });
+  } catch (error) {
+    res.json({
+      stats: agent?.getStats() || {},
+      recentResponses: [],
+      error: error.message,
+    });
+  }
+});
+
 // ============================================
 // DATA ENDPOINTS
 // ============================================

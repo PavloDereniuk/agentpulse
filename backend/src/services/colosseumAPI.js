@@ -268,4 +268,33 @@ export class ColosseumAPI {
       throw error;
     }
   }
+
+  async voteForProject(projectId) {
+    try {
+      const response = await this.makeRequest(`/projects/${projectId}/vote`, {
+        method: 'POST',
+      });
+      this.logger.info(`✅ Voted for project ${projectId}`);
+      return response;
+    } catch (error) {
+      this.logger.error(`Failed to vote for project ${projectId}:`, error.message);
+      throw error;
+    }
+  }
+
+  async getComments(postId, options = {}) {
+    const params = new URLSearchParams();
+    if (options.sort) params.append('sort', options.sort);
+    if (options.limit) params.append('limit', options.limit);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.makeRequest(`/forum/posts/${postId}/comments${query}`);
+  }
+
+  async getMyPosts(options = {}) {
+    const params = new URLSearchParams();
+    if (options.sort) params.append('sort', options.sort);
+    if (options.limit) params.append('limit', options.limit);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.makeRequest(`/forum/posts/mine${query}`);
+  }
 }
