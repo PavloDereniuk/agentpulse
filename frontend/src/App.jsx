@@ -1,48 +1,296 @@
-import React from 'react'
+/**
+ * AgentPulse Dashboard
+ * 
+ * The First Autonomous Analytics Agent for AI Agent Communities
+ * 
+ * @author AgentPulse (Agent #503)
+ */
+
+import React, { useState, useEffect } from 'react';
+import SolanaActivity from './components/SolanaActivity';
+import './App.css';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'https://agentpulse-production-8e01.up.railway.app';
 
 function App() {
+  const [health, setHealth] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+
+  // Fetch health data
+  const fetchHealth = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/health`);
+      if (!res.ok) throw new Error('Failed to fetch health');
+      const data = await res.json();
+      setHealth(data);
+      setLastUpdate(new Date());
+      setError(null);
+    } catch (err) {
+      console.error('Health fetch error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch and auto-refresh
+  useEffect(() => {
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, []);
+
+  // Format uptime
+  const formatUptime = (seconds) => {
+    if (!seconds) return '—';
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  // Format time
+  const formatTime = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  };
+
+  const agent = health?.agent;
+
   return (
-    <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
-      <h1>🫀 AgentPulse</h1>
-      <p>The First Autonomous Analytics Agent for AI Agent Communities</p>
-      
-      <div style={{ marginTop: '2rem' }}>
-        <h2>Agent Status</h2>
-        <p>✅ Backend running</p>
-        <p>✅ Database connected</p>
-        <p>✅ Autonomous loops active</p>
-        <p>✅ Project created (ID: 244)</p>
-        <p>✅ Forum post published (ID: 861)</p>
-      </div>
+    <div className="app">
+      {/* Header */}
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo-section">
+            <span className="logo-pulse">🫀</span>
+            <div className="logo-text">
+              <h1>AgentPulse</h1>
+              <p className="tagline">The First Autonomous Analytics Agent for AI Agent Communities</p>
+            </div>
+          </div>
+          <div className="header-status">
+            <span className={`status-indicator ${health?.status === 'ok' ? 'online' : 'offline'}`}>
+              {health?.status === 'ok' ? '● Online' : '○ Offline'}
+            </span>
+            <span className="agent-id">Agent #503</span>
+          </div>
+        </div>
+      </header>
 
-      <div style={{ marginTop: '2rem' }}>
-        <h2>Links</h2>
-        <ul>
-          <li>
-            <a href="https://colosseum.com/agent-hackathon/projects/agentpulse" target="_blank">
-              Project Page
-            </a>
-          </li>
-          <li>
-            <a href="https://colosseum.com/agent-hackathon/forum/861" target="_blank">
-              Forum Introduction
-            </a>
-          </li>
-          <li>
-            <a href="https://github.com/PavloDereniuk/agentpulse" target="_blank">
-              GitHub Repository
-            </a>
-          </li>
-        </ul>
-      </div>
+      {/* Main Content */}
+      <main className="app-main">
+        {/* Live Stats Section */}
+        <section className="stats-section">
+          <h2 className="section-title">
+            <span className="title-icon">📊</span>
+            Live Agent Stats
+          </h2>
+          
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Connecting to agent...</p>
+            </div>
+          ) : error ? (
+            <div className="error-state">
+              <span className="error-icon">⚠️</span>
+              <p>Connection error: {error}</p>
+              <button onClick={fetchHealth} className="retry-button">Retry</button>
+            </div>
+          ) : (
+            <div className="stats-grid">
+              <div className="stat-card primary">
+                <div className="stat-icon">📡</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.dataCollections || 0}</span>
+                  <span className="stat-label">Data Collections</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">💡</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.insightsGenerated || 0}</span>
+                  <span className="stat-label">Insights Generated</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">📝</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.forumPosts || 0}</span>
+                  <span className="stat-label">Forum Posts</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">💬</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.forumComments || 0}</span>
+                  <span className="stat-label">Comments</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">🔗</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.onChainLogs || 0}</span>
+                  <span className="stat-label">On-Chain Logs</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">⏱️</div>
+                <div className="stat-info">
+                  <span className="stat-value">{formatUptime(agent?.uptime)}</span>
+                  <span className="stat-label">Uptime</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {lastUpdate && (
+            <p className="last-update">Last updated: {formatTime(lastUpdate)}</p>
+          )}
+        </section>
 
-      <div style={{ marginTop: '2rem' }}>
-        <p style={{ color: '#666' }}>
-          Dashboard UI coming soon... Agent is working autonomously! 🚀
+        {/* Two Column Layout */}
+        <div className="two-column">
+          {/* Solana Activity */}
+          <section className="solana-section">
+            <SolanaActivity />
+          </section>
+
+          {/* Autonomous Status */}
+          <section className="autonomous-section">
+            <div className="autonomous-card">
+              <h2 className="section-title">
+                <span className="title-icon">🤖</span>
+                Autonomous Operations
+              </h2>
+              
+              <div className="auto-status-list">
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Data Collection</span>
+                  <span className="status-interval">Every 5 min</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Hourly Analysis</span>
+                  <span className="status-interval">Every hour</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Forum Posting</span>
+                  <span className="status-interval">Quality ≥ 6/8</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Daily Reports</span>
+                  <span className="status-interval">9:00 UTC</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">On-Chain Logging</span>
+                  <span className="status-interval">Per action</span>
+                </div>
+              </div>
+
+              <div className="autonomy-quote">
+                <p>"Because we can just do things."</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* Links Section */}
+        <section className="links-section">
+          <h2 className="section-title">
+            <span className="title-icon">🔗</span>
+            Quick Links
+          </h2>
+          
+          <div className="links-grid">
+            <a 
+              href="https://colosseum.com/agent-hackathon/projects/agentpulse" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="link-card"
+            >
+              <span className="link-icon">🏆</span>
+              <span className="link-text">Project Page</span>
+              <span className="link-arrow">→</span>
+            </a>
+            
+            <a 
+              href="https://colosseum.com/agent-hackathon/forum" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="link-card"
+            >
+              <span className="link-icon">💬</span>
+              <span className="link-text">Forum Posts</span>
+              <span className="link-arrow">→</span>
+            </a>
+            
+            <a 
+              href="https://github.com/PavloDereniuk/agentpulse" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="link-card"
+            >
+              <span className="link-icon">📂</span>
+              <span className="link-text">GitHub Repo</span>
+              <span className="link-arrow">→</span>
+            </a>
+            
+            <a 
+              href="https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="link-card solana-link"
+            >
+              <span className="link-icon">🔗</span>
+              <span className="link-text">Solana Wallet</span>
+              <span className="link-arrow">→</span>
+            </a>
+          </div>
+        </section>
+
+        {/* Hackathon Info */}
+        <section className="hackathon-section">
+          <div className="hackathon-card">
+            <div className="hackathon-info">
+              <span className="hackathon-badge">🏅 Colosseum AI Agent Hackathon</span>
+              <p className="hackathon-dates">Feb 2-12, 2026 • $100,000 Prize Pool</p>
+            </div>
+            <div className="hackathon-targets">
+              <span className="target-badge">🎯 Top 3</span>
+              <span className="target-badge agentic">🤖 Most Agentic</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="app-footer">
+        <p>
+          Built autonomously by <strong>AgentPulse</strong> (Agent #503) 
+          with <a href="https://x.com/PDereniuk" target="_blank" rel="noopener noreferrer">@PDereniuk</a>
         </p>
-      </div>
+        <p className="footer-tagline">🫀 Not just a dashboard — a living, participating member of the ecosystem.</p>
+      </footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
