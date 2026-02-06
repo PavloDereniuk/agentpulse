@@ -8,6 +8,8 @@
 
 import React, { useState, useEffect } from 'react';
 import SolanaActivity from './components/SolanaActivity';
+import Leaderboard from './components/Leaderboard';
+import Evolution from './components/Evolution';
 import './App.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://agentpulse-production-8e01.up.railway.app';
@@ -106,23 +108,7 @@ function App() {
               <button onClick={fetchHealth} className="retry-button">Retry</button>
             </div>
           ) : (
-            <div className="stats-grid">
-              <div className="stat-card primary">
-                <div className="stat-icon">📡</div>
-                <div className="stat-info">
-                  <span className="stat-value">{agent?.dataCollections || 0}</span>
-                  <span className="stat-label">Data Collections</span>
-                </div>
-              </div>
-              
-              <div className="stat-card">
-                <div className="stat-icon">💡</div>
-                <div className="stat-info">
-                  <span className="stat-value">{agent?.insightsGenerated || 0}</span>
-                  <span className="stat-label">Insights Generated</span>
-                </div>
-              </div>
-              
+             <div className="stats-grid">
               <div className="stat-card">
                 <div className="stat-icon">📝</div>
                 <div className="stat-info">
@@ -134,8 +120,8 @@ function App() {
               <div className="stat-card">
                 <div className="stat-icon">💬</div>
                 <div className="stat-info">
-                  <span className="stat-value">{agent?.forumComments || 0}</span>
-                  <span className="stat-label">Comments</span>
+                  <span className="stat-value">{agent?.commentResponder?.responsesGenerated || 0}</span>
+                  <span className="stat-label">Responses</span>
                 </div>
               </div>
               
@@ -143,7 +129,31 @@ function App() {
                 <div className="stat-icon">🔗</div>
                 <div className="stat-info">
                   <span className="stat-value">{agent?.onChainLogs || 0}</span>
-                  <span className="stat-label">On-Chain Logs</span>
+                  <span className="stat-label">On-Chain</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">📰</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.digestsGenerated || 0}</span>
+                  <span className="stat-label">Digests</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">🔦</div>
+                <div className="stat-info">
+                  <span className="stat-value">{agent?.spotlightsGenerated || 0}</span>
+                  <span className="stat-label">Spotlights</span>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">🧬</div>
+                <div className="stat-info">
+                  <span className="stat-value">v{agent?.strategyVersion || 1}</span>
+                  <span className="stat-label">Strategy</span>
                 </div>
               </div>
               
@@ -190,13 +200,28 @@ function App() {
                 </div>
                 <div className="auto-status-item active">
                   <span className="status-dot"></span>
-                  <span className="status-text">Forum Posting</span>
-                  <span className="status-interval">Quality ≥ 6/8</span>
+                  <span className="status-text">Daily Digest</span>
+                  <span className="status-interval">9:00 + 18:00 UTC</span>
                 </div>
                 <div className="auto-status-item active">
                   <span className="status-dot"></span>
-                  <span className="status-text">Daily Reports</span>
-                  <span className="status-interval">9:00 UTC</span>
+                  <span className="status-text">Agent Spotlight</span>
+                  <span className="status-interval">15:00 UTC</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Comment Responses</span>
+                  <span className="status-interval">Every 30 min</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Self-Improvement</span>
+                  <span className="status-interval">Every 6h</span>
+                </div>
+                <div className="auto-status-item active">
+                  <span className="status-dot"></span>
+                  <span className="status-text">Leaderboard Snapshots</span>
+                  <span className="status-interval">Every 4h</span>
                 </div>
                 <div className="auto-status-item active">
                   <span className="status-dot"></span>
@@ -211,6 +236,16 @@ function App() {
             </div>
           </section>
         </div>
+
+        {/* Leaderboard */}
+        <section className="leaderboard-section" style={{ marginBottom: '32px' }}>
+          <Leaderboard />
+        </section>
+
+        {/* Evolution */}
+        <section className="evolution-section" style={{ marginBottom: '32px' }}>
+          <Evolution />
+        </section>
 
         {/* Links Section */}
         <section className="links-section">
