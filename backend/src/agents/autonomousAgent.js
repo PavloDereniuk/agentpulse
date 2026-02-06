@@ -196,7 +196,7 @@ class AutonomousAgent {
    */
   scheduleForumEngagement() {
     // Run at :00 and :45 of every hour (offset from comment responses at :15 and :45)
-    cron.schedule("5,50 * * * *", async () => {
+    cron.schedule("5,25,50 * * * *", async () => {
       try {
         this.logger.info("🗣️ Starting proactive forum engagement...");
         const result = await this.forumEngager.engage();

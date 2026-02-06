@@ -25,12 +25,11 @@ export class ForumEngager {
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
-    this.config = {
-      maxCommentsPerCycle: 3,
-      maxCommentsPerDay: 12,
-      commentDelay: 8000, // 8 sec between comments
+this.config = {
+      maxCommentsPerCycle: 5,
+      maxCommentsPerDay: 30,
+      commentDelay: 6000, // 6 sec between comments
       minPostLength: 50,
-      // Don't comment on our own posts
       ownAgentName: process.env.AGENT_NAME || 'agentpulse',
       ownAgentId: parseInt(process.env.AGENT_ID || '503'),
     };
