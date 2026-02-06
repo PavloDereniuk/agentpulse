@@ -86,8 +86,8 @@ export class SpotlightService {
       // Filter eligible projects
       const eligible = projects.filter(p => {
         const hasSubstance = p.description && p.description.length > 50;
-        const hasDemo = !!(p.technicalDemoLink || p.demoUrl);
-        const hasGithub = !!p.githubUrl;
+        const hasDemo = !!p.presentationLink;
+        const hasGithub = !!p.repoLink;
         const notSpotlighted = !spotlightedIds.includes(p.id);
         const notOwnProject = p.id !== 244; // Skip AgentPulse
 
@@ -104,9 +104,9 @@ export class SpotlightService {
         let score = 0;
 
         // Completeness (max 4)
-        if (p.technicalDemoLink || p.demoUrl) score += 2;
-        if (p.githubUrl) score += 1;
-        if (p.videoDemoLink) score += 1;
+        // Completeness (max 3)
+        if (p.presentationLink) score += 2;
+        if (p.repoLink) score += 1;
 
         // Description quality (max 3)
         if (p.description?.length > 300) score += 3;
@@ -117,9 +117,6 @@ export class SpotlightService {
         const votes = (p.humanUpvotes || 0) + (p.agentUpvotes || 0);
         if (votes > 15) score += 2;
         else if (votes > 5) score += 1;
-
-        // Interesting name/tagline bonus (max 1)
-        if (p.tagline && p.tagline.length > 20) score += 1;
 
         return { ...p, spotlightScore: score };
       });
@@ -150,11 +147,9 @@ export class SpotlightService {
 
 Project Details:
 - Name: ${project.name}
-- Tagline: ${project.tagline || 'N/A'}
 - Description: ${project.description || 'N/A'}
-- GitHub: ${project.githubUrl || 'N/A'}
-- Demo: ${project.technicalDemoLink || project.demoUrl || 'N/A'}
-- Video: ${project.videoDemoLink || 'N/A'}
+- GitHub: ${project.repoLink || 'N/A'}
+- Demo: ${project.presentationLink || 'N/A'}
 - Votes: ${(project.humanUpvotes || 0) + (project.agentUpvotes || 0)}
 
 Write a JSON response:
@@ -206,15 +201,10 @@ Be positive and encouraging — this is a hackathon! Focus on potential and effo
    * Format the spotlight post
    */
   formatSpotlight(project, content) {
-    const demoLink = project.technicalDemoLink || project.demoUrl;
+    const demoLink = project.presentationLink;
     const votes = (project.humanUpvotes || 0) + (project.agentUpvotes || 0);
 
     const sections = [];
-
-    // Header
-    if (project.tagline) {
-      sections.push(`> *${project.tagline}*\n`);
-    }
 
     // What they built
     sections.push(`## 🛠️ What They Built\n`);
@@ -232,8 +222,7 @@ Be positive and encouraging — this is a hackathon! Focus on potential and effo
     sections.push(`## 📊 Project Stats\n`);
     sections.push(`- **Votes:** ${votes}`);
     if (demoLink) sections.push(`- **Live Demo:** [Try it](${demoLink})`);
-    if (project.githubUrl) sections.push(`- **GitHub:** [View Code](${project.githubUrl})`);
-    if (project.videoDemoLink) sections.push(`- **Video Demo:** [Watch](${project.videoDemoLink})`);
+    if (project.repoLink) sections.push(`- **GitHub:** [View Code](${project.repoLink})`);
     sections.push('');
 
     // AgentPulse Score

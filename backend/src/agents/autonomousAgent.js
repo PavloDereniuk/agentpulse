@@ -68,6 +68,8 @@ class AutonomousAgent {
       lastSolanaTx: null,
       digestsGenerated: 0,
       lastDigestTime: null,
+      spotlightsGenerated: 0,
+      lastSpotlightTime: null,
     };
   }
 
@@ -94,6 +96,7 @@ class AutonomousAgent {
     this.scheduleVoting();
     this.scheduleDailyReport();
     this.scheduleDailyDigest();
+    this.scheduleSpotlight();
 
     this.logger.info('✅ All autonomous loops scheduled and running');
   }
@@ -276,6 +279,91 @@ class AutonomousAgent {
   async runDigest() {
     this.logger.info('🧪 Manual trigger: Running Daily Digest');
     await this.runDailyDigest();
+  }
+
+  scheduleSpotlight() {
+    cron.schedule('0 15 * * *', async () => {
+      if (!this.isRunning) return;
+      this.logger.info('🔦 Starting Agent Spotlight...');
+      await this.runSpotlight();
+    });
+    this.logger.info('✅ Spotlight scheduled (15:00 UTC)');
+  }
+
+  async runSpotlight() {
+    try {
+      const spotlight = await this.spotlight.generateSpotlight();
+      if (!spotlight) {
+        this.logger.info('No eligible project for spotlight today');
+        return;
+      }
+
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: 'AGENT_SPOTLIGHT',
+            summary: `Spotlight: ${spotlight.projectName}`,
+            metadata: { projectId: spotlight.projectId },
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = solanaTx.signature;
+        } catch (e) {
+          this.logger.warn('On-chain spotlight logging failed:', e.message);
+        }
+      }
+
+      const verificationLine = solanaTx
+        ? `\n\n🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
+        : '';
+
+      // Retry with backoff
+      let posted = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.forum.createPost({
+            title: spotlight.title,
+            body: spotlight.body + verificationLine,
+            tags: ['progress-update', 'ai'],
+          });
+          posted = true;
+          break;
+        } catch (err) {
+          if (err.message?.includes('429') && attempt < 3) {
+            this.logger.warn(`Rate limited, retry ${attempt}/3 in 30s...`);
+            await new Promise(r => setTimeout(r, 30000));
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      this.stats.spotlightsGenerated++;
+      this.stats.forumPosts++;
+      this.stats.lastSpotlightTime = Date.now();
+      this.stats.lastPostTime = Date.now();
+      this.logger.info(`✅ Spotlight posted: "${spotlight.title}"`);
+
+      await this.logAutonomousAction({
+        action: 'AGENT_SPOTLIGHT',
+        title: spotlight.title,
+        projectId: spotlight.projectId,
+        outcome: 'SUCCESS',
+        solanaTx: solanaTx?.signature,
+      });
+    } catch (error) {
+      this.logger.error('Spotlight failed:', error.message);
+      await this.logAutonomousAction({
+        action: 'AGENT_SPOTLIGHT',
+        outcome: 'FAILED',
+        error: error.message,
+      });
+    }
+  }
+
+  async runSpotlightManual() {
+    this.logger.info('🧪 Manual trigger: Running Spotlight');
+    await this.runSpotlight();
   }
 
   /**

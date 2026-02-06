@@ -516,6 +516,20 @@ app.get("/api/autonomy-log", async (req, res) => {
     }
   });
 
+  app.post("/api/trigger-spotlight", async (req, res) => {
+  if (!agent) {
+    return res.status(503).json({ error: "Agent not running" });
+  }
+  try {
+    logger.info("🧪 Manual Spotlight trigger");
+    await agent.runSpotlightManual();
+    res.json({ success: true, message: "Spotlight triggered", stats: agent.getStats() });
+  } catch (error) {
+    logger.error("Manual spotlight failed:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // ============================================
 // ERROR HANDLING
