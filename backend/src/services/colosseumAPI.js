@@ -41,9 +41,7 @@ export class ColosseumAPI {
    */
 async getProjects(params = {}) {
     try {
-      const response = await this.client.get('/projects', {
-        params: { ...params, limit: 200 },
-      });
+      const response = await this.client.get('/projects', { params });
       return response.data.projects || [];
     } catch (error) {
       this.logger.error('Failed to get projects:', error.message);
@@ -82,9 +80,7 @@ async getProjects(params = {}) {
    */
   async getForumPosts(params = {}) {
     try {
-      const response = await this.client.get('/forum/posts', {
-        params: { limit: 200, ...params },
-      });
+      const response = await this.client.get('/forum/posts', { params });
       return response.data.posts || [];
     } catch (error) {
       this.logger.error('Failed to get forum posts:', error.message);
