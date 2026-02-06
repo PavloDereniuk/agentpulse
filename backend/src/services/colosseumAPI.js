@@ -39,10 +39,26 @@ export class ColosseumAPI {
   /**
    * Get all projects
    */
-  async getProjects(params = {}) {
+async getProjects(params = {}) {
     try {
-      const response = await this.client.get('/projects', { params });
-      return response.data.projects || [];
+      // Fetch all pages
+      const allProjects = [];
+      let page = 1;
+      const limit = params.limit || 100;
+
+      while (true) {
+        const response = await this.client.get('/projects', {
+          params: { ...params, limit, page },
+        });
+        const projects = response.data.projects || [];
+        allProjects.push(...projects);
+
+        // Stop if we got less than requested (last page)
+        if (projects.length < limit) break;
+        page++;
+      }
+
+      return allProjects;
     } catch (error) {
       this.logger.error('Failed to get projects:', error.message);
       throw error;
@@ -80,8 +96,22 @@ export class ColosseumAPI {
    */
   async getForumPosts(params = {}) {
     try {
-      const response = await this.client.get('/forum/posts', { params });
-      return response.data.posts || [];
+      const allPosts = [];
+      let page = 1;
+      const limit = params.limit || 100;
+
+      while (true) {
+        const response = await this.client.get('/forum/posts', {
+          params: { ...params, limit, page },
+        });
+        const posts = response.data.posts || [];
+        allPosts.push(...posts);
+
+        if (posts.length < limit) break;
+        page++;
+      }
+
+      return allPosts;
     } catch (error) {
       this.logger.error('Failed to get forum posts:', error.message);
       throw error;
