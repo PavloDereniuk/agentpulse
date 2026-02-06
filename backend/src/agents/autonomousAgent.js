@@ -229,11 +229,26 @@ class AutonomousAgent {
         ? `\n\n🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
         : '';
 
-      await this.forum.createPost({
-        title: digest.title,
-        body: digest.body + verificationLine,
-        tags: ['progress-update', 'ai'],
-      });
+      // Retry with backoff if rate limited
+      let posted = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.forum.createPost({
+            title: digest.title,
+            body: digest.body + verificationLine,
+            tags: ['progress-update', 'ai'],
+          });
+          posted = true;
+          break;
+        } catch (err) {
+          if (err.message?.includes('429') && attempt < 3) {
+            this.logger.warn(`Rate limited, retry ${attempt}/3 in 30s...`);
+            await new Promise(r => setTimeout(r, 30000));
+          } else {
+            throw err;
+          }
+        }
+      }
 
       await this.dailyDigest.storeDigest(digest);
       this.stats.digestsGenerated++;
