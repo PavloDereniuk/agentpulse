@@ -72,6 +72,8 @@ class AutonomousAgent {
       spotlightsGenerated: 0,
       lastSpotlightTime: null,
       leaderboardSnapshots: 0,
+      selfImprovements: 0,
+      strategyVersion: 1,
     };
   }
 
@@ -100,6 +102,7 @@ class AutonomousAgent {
     this.scheduleDailyDigest();
     this.scheduleSpotlight();
     this.scheduleLeaderboardSnapshots();
+    this.scheduleSelfImprovement();
 
     this.logger.info('✅ All autonomous loops scheduled and running');
   }
@@ -380,6 +383,43 @@ class AutonomousAgent {
       }
     });
     this.logger.info('✅ Leaderboard snapshots scheduled (every 4h)');
+  }
+
+  scheduleSelfImprovement() {
+    cron.schedule('0 */6 * * *', async () => {
+      if (!this.isRunning) return;
+      this.logger.info('🧬 Starting Self-Improvement cycle...');
+      await this.runSelfImprovement();
+    });
+    this.logger.info('✅ Self-Improvement scheduled (every 6h)');
+  }
+
+  async runSelfImprovement() {
+    try {
+      const result = await this.selfImprove.runImprovementCycle();
+      this.stats.selfImprovements++;
+      this.stats.strategyVersion = result.strategyVersion;
+      this.logger.info(`✅ Self-improvement complete: v${result.strategyVersion}, ${result.adaptations.length} changes`);
+
+      await this.logAutonomousAction({
+        action: 'SELF_IMPROVEMENT',
+        outcome: 'SUCCESS',
+        strategyVersion: result.strategyVersion,
+        adaptations: result.adaptations.length,
+      });
+    } catch (error) {
+      this.logger.error('Self-improvement failed:', error.message);
+      await this.logAutonomousAction({
+        action: 'SELF_IMPROVEMENT',
+        outcome: 'FAILED',
+        error: error.message,
+      });
+    }
+  }
+
+  async runSelfImprovementManual() {
+    this.logger.info('🧪 Manual trigger: Self-Improvement');
+    await this.runSelfImprovement();
   }
 
   /**

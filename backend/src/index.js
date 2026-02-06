@@ -561,6 +561,28 @@ app.get("/api/leaderboard/history", async (req, res) => {
   }
 });
 
+app.get("/api/evolution", async (req, res) => {
+  if (!agent) return res.status(503).json({ error: "Agent not running" });
+  try {
+    const strategy = agent.selfImprove.getStrategy();
+    const history = await agent.selfImprove.getEvolutionHistory();
+    res.json({ strategy, history });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/trigger-self-improve", async (req, res) => {
+  if (!agent) return res.status(503).json({ error: "Agent not running" });
+  try {
+    logger.info("🧪 Manual Self-Improvement trigger");
+    await agent.runSelfImprovementManual();
+    res.json({ success: true, message: "Self-improvement triggered", stats: agent.getStats() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // ============================================
 // ERROR HANDLING
