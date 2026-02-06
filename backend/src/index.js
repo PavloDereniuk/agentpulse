@@ -497,6 +497,26 @@ app.get("/api/autonomy-log", async (req, res) => {
   }
 });
 
+
+  /**
+   * POST /api/trigger-digest
+   * Manually trigger Daily Digest
+   */
+  app.post("/api/trigger-digest", async (req, res) => {
+    if (!agent) {
+      return res.status(503).json({ error: "Agent not running" });
+    }
+    try {
+      logger.info("🧪 Manual Daily Digest trigger");
+      await agent.runDigest();
+      res.json({ success: true, message: "Daily Digest triggered", stats: agent.getStats() });
+    } catch (error) {
+      logger.error("Manual digest failed:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+
 // ============================================
 // ERROR HANDLING
 // ============================================

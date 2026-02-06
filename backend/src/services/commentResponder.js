@@ -9,6 +9,7 @@
  * - Filters spam and low-quality comments
  * - Generates contextual responses via Claude
  * - Rate limiting to avoid spam
+ * - 429 backoff to protect API limits
  * - On-chain logging of responses
  * 
  * @author AgentPulse (Agent #503)
@@ -32,9 +33,11 @@ export class CommentResponder {
     
     // Config
     this.config = {
-      maxResponsesPerHour: 5,
+      maxResponsesPerHour: 3,
+      maxResponsesPerCycle: 3,
       minCommentLength: 20,
-      responseDelay: 2000, // 2 sec between responses
+      responseDelay: 5000, // 5 sec between responses
+      postDelay: 3000, // 3 sec between checking posts
       skipPatterns: [
         /vote.*exchange/i,
         /vote.*for.*vote/i,
@@ -62,8 +65,8 @@ export class CommentResponder {
     this.stats.lastRunTime = new Date();
 
     try {
-      // 1. Get our posts
-      const myPostsData = await this.api.getMyPosts({ sort: 'new', limit: 20 });
+      // 1. Get our posts (limited to 5 to save API calls)
+      const myPostsData = await this.api.getMyPosts({ sort: 'new', limit: 5 });
       const posts = myPostsData.posts || [];
       
       if (posts.length === 0) {
@@ -81,9 +84,15 @@ export class CommentResponder {
         const result = await this.processPostComments(post);
         totalProcessed += result.processed;
         totalResponded += result.responded;
+
+        // Stop if we hit cycle limit
+        if (totalResponded >= this.config.maxResponsesPerCycle) {
+          this.logger.info('Cycle response limit reached, stopping');
+          break;
+        }
         
         // Rate limiting between posts
-        await this.delay(1000);
+        await this.delay(this.config.postDelay);
       }
 
       this.logger.info(`✅ Comment check complete: ${totalProcessed} processed, ${totalResponded} responses`);
@@ -104,8 +113,8 @@ export class CommentResponder {
     let responded = 0;
 
     try {
-      // Get comments for this post
-      const commentsData = await this.api.getComments(post.id, { sort: 'new', limit: 50 });
+      // Get comments for this post (limited to 10)
+      const commentsData = await this.api.getComments(post.id, { sort: 'new', limit: 10 });
       const comments = commentsData.comments || [];
       
       if (comments.length === 0) return { processed: 0, responded: 0 };
@@ -126,6 +135,12 @@ export class CommentResponder {
 
       // Process each comment
       for (const comment of newComments) {
+        // Limit per cycle
+        if (responded >= this.config.maxResponsesPerCycle) {
+          this.logger.info('Cycle response limit reached, stopping');
+          break;
+        }
+
         processed++;
         this.stats.commentsProcessed++;
 
@@ -162,12 +177,25 @@ export class CommentResponder {
           
         } catch (error) {
           this.logger.error(`Failed to respond to comment ${comment.id}:`, error.message);
+          
+          // Stop cycle on rate limit
+          if (error.message?.includes('429')) {
+            this.logger.warn('Rate limited by API! Stopping cycle.');
+            return { processed, responded };
+          }
+          
           await this.markCommentProcessed(post.id, comment.id, 'error', error.message);
         }
       }
 
     } catch (error) {
       this.logger.error(`Failed to process comments for post ${post.id}:`, error.message);
+      
+      // Stop on rate limit
+      if (error.message?.includes('429')) {
+        this.logger.warn('Rate limited by API! Stopping.');
+        return { processed, responded };
+      }
     }
 
     return { processed, responded };
@@ -285,14 +313,13 @@ Response:`;
     const result = await this.api.createComment(postId, fullResponse);
 
     // Mark as processed in database
-    await this.markCommentProcessed(postId, originalComment.id, 'responded', null, result.comment?.id);
+    await this.markCommentProcessed(postId, originalComment.id, 'responded');
 
     // Log autonomous action
     await this.logAction({
       action: 'COMMENT_RESPONSE',
       postId,
       originalCommentId: originalComment.id,
-      responseCommentId: result.comment?.id,
       respondedTo: originalComment.agentName,
     });
 
@@ -338,8 +365,9 @@ Response:`;
 
   /**
    * Mark a comment as processed in database
+   * Note: removed response_id column to fix DB schema mismatch
    */
-  async markCommentProcessed(postId, commentId, status, reason = null, responseId = null) {
+  async markCommentProcessed(postId, commentId, status, reason = null) {
     try {
       // Ensure table exists
       await this.db.pool.query(`
@@ -347,7 +375,6 @@ Response:`;
           id SERIAL PRIMARY KEY,
           post_id INTEGER NOT NULL,
           comment_id INTEGER NOT NULL,
-          response_id INTEGER,
           status VARCHAR(50) NOT NULL,
           reason VARCHAR(255),
           created_at TIMESTAMP DEFAULT NOW(),
@@ -356,13 +383,12 @@ Response:`;
       `);
 
       await this.db.pool.query(`
-        INSERT INTO comment_responses (post_id, comment_id, response_id, status, reason)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO comment_responses (post_id, comment_id, status, reason)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (post_id, comment_id) DO UPDATE SET
-          status = $4,
-          reason = $5,
-          response_id = $3
-      `, [postId, commentId, responseId, status, reason]);
+          status = $3,
+          reason = $4
+      `, [postId, commentId, status, reason]);
 
     } catch (error) {
       this.logger.error('Failed to mark comment processed:', error.message);

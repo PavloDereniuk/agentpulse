@@ -26,6 +26,10 @@ import { CommentResponder } from '../services/commentResponder.js';
 import { VotingService } from '../services/votingService.js';
 import { Logger } from '../utils/logger.js';
 import { QualityChecker } from '../utils/qualityChecker.js';
+import { DailyDigestService } from '../services/dailyDigestService.js';
+import { SpotlightService } from '../services/spotlightService.js';
+import { LeaderboardService } from '../services/leaderboardService.js';
+import { SelfImproveService } from '../services/selfImproveService.js';
 
 class AutonomousAgent {
   constructor() {
@@ -36,6 +40,10 @@ class AutonomousAgent {
     this.solana = new SolanaService();
     this.commentResponder = new CommentResponder();
     this.votingService = new VotingService();
+    this.dailyDigest = new DailyDigestService();
+    this.spotlight = new SpotlightService();
+    this.leaderboard = new LeaderboardService();
+    this.selfImprove = new SelfImproveService();
     this.logger = new Logger('AutonomousAgent');
     this.qualityChecker = new QualityChecker();
     
@@ -58,6 +66,8 @@ class AutonomousAgent {
       // Solana stats
       onChainLogs: 0,
       lastSolanaTx: null,
+      digestsGenerated: 0,
+      lastDigestTime: null,
     };
   }
 
@@ -83,6 +93,7 @@ class AutonomousAgent {
     this.scheduleCommentResponses();
     this.scheduleVoting();
     this.scheduleDailyReport();
+    this.scheduleDailyDigest();
 
     this.logger.info('✅ All autonomous loops scheduled and running');
   }
@@ -181,6 +192,75 @@ class AutonomousAgent {
     });
 
     this.logger.info('✅ Daily report scheduled (9 AM UTC)');
+  }
+
+   /**
+   * Daily Digest — 9:00 and 18:00 UTC
+   */
+  scheduleDailyDigest() {
+    cron.schedule('0 9,18 * * *', async () => {
+      if (!this.isRunning) return;
+      this.logger.info('📰 Starting Daily Digest...');
+      await this.runDailyDigest();
+    });
+    this.logger.info('✅ Daily Digest scheduled (9:00 + 18:00 UTC)');
+  }
+
+  async runDailyDigest() {
+    try {
+      const digest = await this.dailyDigest.generateDigest();
+      
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: 'DAILY_DIGEST',
+            summary: digest.title,
+            metadata: digest.stats,
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = solanaTx.signature;
+        } catch (e) {
+          this.logger.warn('On-chain digest logging failed:', e.message);
+        }
+      }
+
+      const verificationLine = solanaTx
+        ? `\n\n🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
+        : '';
+
+      await this.forum.createPost({
+        title: digest.title,
+        body: digest.body + verificationLine,
+        tags: ['progress-update', 'ai'],
+      });
+
+      await this.dailyDigest.storeDigest(digest);
+      this.stats.digestsGenerated++;
+      this.stats.forumPosts++;
+      this.stats.lastDigestTime = Date.now();
+      this.stats.lastPostTime = Date.now();
+      this.logger.info(`✅ Daily Digest posted: "${digest.title}"`);
+
+      await this.logAutonomousAction({
+        action: 'DAILY_DIGEST',
+        title: digest.title,
+        outcome: 'SUCCESS',
+        solanaTx: solanaTx?.signature,
+      });
+    } catch (error) {
+      this.logger.error('Daily Digest failed:', error.message);
+      await this.logAutonomousAction({
+        action: 'DAILY_DIGEST',
+        outcome: 'FAILED',
+        error: error.message,
+      });
+    }
+  }
+
+  async runDigest() {
+    this.logger.info('🧪 Manual trigger: Running Daily Digest');
+    await this.runDailyDigest();
   }
 
   /**
@@ -729,5 +809,5 @@ export default AutonomousAgent;
 // If running directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   const agent = new AutonomousAgent();
-  agent.start();
+  // agent.start();
 }
