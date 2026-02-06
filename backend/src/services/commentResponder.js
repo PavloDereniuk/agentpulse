@@ -377,10 +377,15 @@ Response:`;
           comment_id INTEGER NOT NULL,
           status VARCHAR(50) NOT NULL,
           reason VARCHAR(255),
-          created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(post_id, comment_id)
+          created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      // Ensure unique constraint exists
+      await this.db.pool.query(`
+        ALTER TABLE comment_responses
+        ADD CONSTRAINT comment_responses_post_comment_unique
+        UNIQUE (post_id, comment_id)
+      `).catch(() => { /* constraint already exists */ });
 
       await this.db.pool.query(`
         INSERT INTO comment_responses (post_id, comment_id, status, reason)
