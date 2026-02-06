@@ -3,7 +3,7 @@
  *
  * Main Express application serving the API
  * and running autonomous agent in background
- * 
+ *
  * Now with Solana integration! 🔗
  */
 
@@ -39,7 +39,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:3000",
       "https://agentpulse-frontend.vercel.app",
-      "https://agentpulse.vercel.app"
+      "https://agentpulse.vercel.app",
     ],
   }),
 );
@@ -70,7 +70,7 @@ if (process.env.AUTO_POST_ENABLED === "true") {
  */
 app.get("/health", async (req, res) => {
   const solanaStats = solana.getStats();
-  
+
   res.json({
     status: "ok",
     agent: agent ? agent.getStats() : null,
@@ -128,7 +128,7 @@ app.get("/api/solana/status", async (req, res) => {
 app.get("/api/solana/balance/:address", async (req, res) => {
   try {
     const { address } = req.params;
-    
+
     if (!solana.isValidAddress(address)) {
       return res.status(400).json({ error: "Invalid Solana address" });
     }
@@ -149,12 +149,15 @@ app.get("/api/solana/transactions/:address", async (req, res) => {
   try {
     const { address } = req.params;
     const { limit = 10 } = req.query;
-    
+
     if (!solana.isValidAddress(address)) {
       return res.status(400).json({ error: "Invalid Solana address" });
     }
 
-    const transactions = await solana.getRecentTransactions(address, parseInt(limit));
+    const transactions = await solana.getRecentTransactions(
+      address,
+      parseInt(limit),
+    );
     res.json({ address, transactions });
   } catch (error) {
     logger.error("Error getting transactions:", error);
@@ -170,7 +173,7 @@ app.get("/api/solana/tx/:signature", async (req, res) => {
   try {
     const { signature } = req.params;
     const transaction = await solana.getTransaction(signature);
-    
+
     if (!transaction) {
       return res.status(404).json({ error: "Transaction not found" });
     }
@@ -244,7 +247,9 @@ app.get("/api/solana/on-chain-logs", async (req, res) => {
 app.post("/api/solana/airdrop", async (req, res) => {
   try {
     if (solana.network !== "devnet") {
-      return res.status(400).json({ error: "Airdrop only available on devnet" });
+      return res
+        .status(400)
+        .json({ error: "Airdrop only available on devnet" });
     }
 
     if (!solana.canWrite()) {
@@ -316,6 +321,16 @@ app.post("/api/trigger-comments", async (req, res) => {
   }
 });
 
+app.post("/api/trigger-engagement", async (req, res) => {
+  try {
+    logger.info("🗣️ Manual forum engagement trigger");
+    const result = await agent.forumEngager.engage();
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * POST /api/trigger-voting
  * Manually trigger voting cycle
@@ -346,14 +361,14 @@ app.post("/api/trigger-voting", async (req, res) => {
 app.get("/api/votes", async (req, res) => {
   try {
     const stats = agent?.getStats();
-    
+
     // Get recent votes from database
     const result = await db.pool.query(`
       SELECT * FROM project_votes 
       ORDER BY created_at DESC 
       LIMIT 20
     `);
-    
+
     res.json({
       stats: {
         projectsEvaluated: stats?.projectsEvaluated || 0,
@@ -378,7 +393,7 @@ app.get("/api/votes", async (req, res) => {
 app.get("/api/comment-responses", async (req, res) => {
   try {
     const stats = agent?.getStats();
-    
+
     // Get recent responses from database
     const result = await db.pool.query(`
       SELECT * FROM comment_responses 
@@ -386,7 +401,7 @@ app.get("/api/comment-responses", async (req, res) => {
       ORDER BY created_at DESC 
       LIMIT 20
     `);
-    
+
     res.json({
       stats: {
         commentResponses: stats?.commentResponses || 0,
@@ -414,12 +429,15 @@ app.get("/api/comment-responses", async (req, res) => {
 app.get("/api/autonomy-log", async (req, res) => {
   try {
     const { limit = 50 } = req.query;
-    const logs = await db.pool.query(`
+    const logs = await db.pool.query(
+      `
       SELECT * FROM autonomy_log 
       ORDER BY created_at DESC 
       LIMIT $1
-    `, [parseInt(limit)]);
-    
+    `,
+      [parseInt(limit)],
+    );
+
     res.json({ logs: logs.rows });
   } catch (error) {
     logger.error("Error fetching autonomy log:", error);
@@ -427,33 +445,40 @@ app.get("/api/autonomy-log", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/trigger-digest
+ * Manually trigger Daily Digest
+ */
+app.post("/api/trigger-digest", async (req, res) => {
+  if (!agent) {
+    return res.status(503).json({ error: "Agent not running" });
+  }
+  try {
+    logger.info("🧪 Manual Daily Digest trigger");
+    await agent.runDigest();
+    res.json({
+      success: true,
+      message: "Daily Digest triggered",
+      stats: agent.getStats(),
+    });
+  } catch (error) {
+    logger.error("Manual digest failed:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-  /**
-   * POST /api/trigger-digest
-   * Manually trigger Daily Digest
-   */
-  app.post("/api/trigger-digest", async (req, res) => {
-    if (!agent) {
-      return res.status(503).json({ error: "Agent not running" });
-    }
-    try {
-      logger.info("🧪 Manual Daily Digest trigger");
-      await agent.runDigest();
-      res.json({ success: true, message: "Daily Digest triggered", stats: agent.getStats() });
-    } catch (error) {
-      logger.error("Manual digest failed:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/trigger-spotlight", async (req, res) => {
+app.post("/api/trigger-spotlight", async (req, res) => {
   if (!agent) {
     return res.status(503).json({ error: "Agent not running" });
   }
   try {
     logger.info("🧪 Manual Spotlight trigger");
     await agent.runSpotlightManual();
-    res.json({ success: true, message: "Spotlight triggered", stats: agent.getStats() });
+    res.json({
+      success: true,
+      message: "Spotlight triggered",
+      stats: agent.getStats(),
+    });
   } catch (error) {
     logger.error("Manual spotlight failed:", error);
     res.status(500).json({ error: error.message });
@@ -461,7 +486,9 @@ app.get("/api/autonomy-log", async (req, res) => {
 });
 
 // Leaderboard API
-const leaderboardService = new (await import('./services/leaderboardService.js')).LeaderboardService();
+const leaderboardService = new (
+  await import("./services/leaderboardService.js")
+).LeaderboardService();
 
 app.get("/api/leaderboard", async (req, res) => {
   try {
@@ -483,7 +510,9 @@ app.get("/api/leaderboard/trends", async (req, res) => {
 
 app.get("/api/leaderboard/history", async (req, res) => {
   try {
-    const projectId = req.query.projectId ? parseInt(req.query.projectId) : null;
+    const projectId = req.query.projectId
+      ? parseInt(req.query.projectId)
+      : null;
     const data = await leaderboardService.getHistory(projectId);
     res.json(data);
   } catch (error) {
@@ -507,12 +536,15 @@ app.post("/api/trigger-self-improve", async (req, res) => {
   try {
     logger.info("🧪 Manual Self-Improvement trigger");
     await agent.runSelfImprovementManual();
-    res.json({ success: true, message: "Self-improvement triggered", stats: agent.getStats() });
+    res.json({
+      success: true,
+      message: "Self-improvement triggered",
+      stats: agent.getStats(),
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // ============================================
 // ERROR HANDLING
@@ -538,9 +570,13 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   logger.info(`🚀 AgentPulse server running on port ${PORT}`);
-  logger.info(`📊 Dashboard: ${process.env.FRONTEND_URL || "http://localhost:5173"}`);
+  logger.info(
+    `📊 Dashboard: ${process.env.FRONTEND_URL || "http://localhost:5173"}`,
+  );
   logger.info(`🤖 Autonomous agent: ${agent ? "RUNNING" : "DISABLED"}`);
-  logger.info(`🔗 Solana: ${solana.network} (write: ${solana.canWrite() ? "enabled" : "disabled"})`);
+  logger.info(
+    `🔗 Solana: ${solana.network} (write: ${solana.canWrite() ? "enabled" : "disabled"})`,
+  );
 });
 
 // Graceful shutdown

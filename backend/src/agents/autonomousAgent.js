@@ -30,6 +30,7 @@ import { DailyDigestService } from "../services/dailyDigestService.js";
 import { SpotlightService } from "../services/spotlightService.js";
 import { LeaderboardService } from "../services/leaderboardService.js";
 import { SelfImproveService } from "../services/selfImproveService.js";
+import { ForumEngager } from "../services/forumEngager.js";
 
 class AutonomousAgent {
   constructor() {
@@ -39,6 +40,7 @@ class AutonomousAgent {
     this.db = new DatabaseService();
     this.solana = new SolanaService();
     this.commentResponder = new CommentResponder();
+    this.forumEngager = new ForumEngager();
     this.votingService = new VotingService();
     this.dailyDigest = new DailyDigestService();
     this.spotlight = new SpotlightService();
@@ -73,6 +75,7 @@ class AutonomousAgent {
       leaderboardSnapshots: 0,
       selfImprovements: 0,
       strategyVersion: 1,
+      forumEngagements: 0,
     };
   }
 
@@ -96,6 +99,7 @@ class AutonomousAgent {
     this.scheduleDataCollection();
     this.scheduleHourlyAnalysis();
     this.scheduleCommentResponses();
+    this.scheduleForumEngagement();
     this.scheduleVoting();
     this.scheduleDailyDigest();
     this.scheduleSpotlight();
@@ -184,6 +188,26 @@ class AutonomousAgent {
     });
 
     this.logger.info("✅ Comment responses scheduled (every 30 minutes)");
+  }
+
+  /**
+   * Forum Engagement Loop - Every 45 minutes
+   * Proactively comments on other agents' posts
+   */
+  scheduleForumEngagement() {
+    // Run at :00 and :45 of every hour (offset from comment responses at :15 and :45)
+    cron.schedule("5,50 * * * *", async () => {
+      try {
+        this.logger.info("🗣️ Starting proactive forum engagement...");
+        const result = await this.forumEngager.engage();
+        if (result.engaged > 0) {
+          this.stats.forumEngagements += result.engaged;
+        }
+      } catch (error) {
+        this.logger.error("Forum engagement error:", error.message);
+      }
+    });
+    this.logger.info("✅ Forum engagement scheduled (every ~45 min)");
   }
 
   /**
@@ -488,6 +512,14 @@ class AutonomousAgent {
         /* table may not exist */
       }
 
+       // Forum engagements
+      try {
+        const engagements = await this.db.pool.query(
+          `SELECT COUNT(*) FROM forum_engagements`,
+        );
+        this.stats.forumEngagements = parseInt(engagements.rows[0]?.count || 0);
+      } catch (e) { /* table may not exist */ }
+
       // Comment responses
       try {
         const comments = await this.db.pool.query(
@@ -510,7 +542,7 @@ class AutonomousAgent {
 
       // On-chain logs
       try {
-         const logs = await this.db.pool.query(
+        const logs = await this.db.pool.query(
           `SELECT COUNT(*) FROM autonomy_log WHERE details::text LIKE '%solanaTx%' OR details::text LIKE '%signature%' OR details::text LIKE '%on-chain%' OR details::text LIKE '%SOLANA%'`,
         );
         this.stats.onChainLogs = parseInt(logs.rows[0]?.count || 0);
@@ -518,7 +550,7 @@ class AutonomousAgent {
         /* table may not exist */
       }
 
-       // Digests
+      // Digests
       try {
         const digests = await this.db.pool.query(
           `SELECT COUNT(*) FROM daily_digests`,
@@ -533,7 +565,9 @@ class AutonomousAgent {
         const spotlights = await this.db.pool.query(
           `SELECT COUNT(*) FROM spotlights`,
         );
-        this.stats.spotlightsGenerated = parseInt(spotlights.rows[0]?.count || 0);
+        this.stats.spotlightsGenerated = parseInt(
+          spotlights.rows[0]?.count || 0,
+        );
       } catch (e) {
         /* table may not exist */
       }
@@ -567,45 +601,65 @@ class AutonomousAgent {
           `SELECT MAX(created_at) as last_time FROM comment_responses`,
         );
         if (lastComment.rows[0]?.last_time) {
-          this.stats.lastCommentCheckTime = new Date(lastComment.rows[0].last_time).getTime();
+          this.stats.lastCommentCheckTime = new Date(
+            lastComment.rows[0].last_time,
+          ).getTime();
         }
-      } catch (e) { /* table may not exist */ }
+      } catch (e) {
+        /* table may not exist */
+      }
 
       try {
         const lastVote = await this.db.pool.query(
           `SELECT MAX(created_at) as last_time FROM project_votes`,
         );
         if (lastVote.rows[0]?.last_time) {
-          this.stats.lastVotingTime = new Date(lastVote.rows[0].last_time).getTime();
+          this.stats.lastVotingTime = new Date(
+            lastVote.rows[0].last_time,
+          ).getTime();
         }
-      } catch (e) { /* table may not exist */ }
+      } catch (e) {
+        /* table may not exist */
+      }
 
       try {
         const lastDigest = await this.db.pool.query(
           `SELECT MAX(created_at) as last_time FROM daily_digests`,
         );
         if (lastDigest.rows[0]?.last_time) {
-          this.stats.lastDigestTime = new Date(lastDigest.rows[0].last_time).getTime();
+          this.stats.lastDigestTime = new Date(
+            lastDigest.rows[0].last_time,
+          ).getTime();
         }
-      } catch (e) { /* table may not exist */ }
+      } catch (e) {
+        /* table may not exist */
+      }
 
       try {
         const lastPost = await this.db.pool.query(
           `SELECT MAX(created_at) as last_time FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`,
         );
         if (lastPost.rows[0]?.last_time) {
-          this.stats.lastPostTime = new Date(lastPost.rows[0].last_time).getTime();
+          this.stats.lastPostTime = new Date(
+            lastPost.rows[0].last_time,
+          ).getTime();
         }
-      } catch (e) { /* table may not exist */ }
+      } catch (e) {
+        /* table may not exist */
+      }
 
       try {
         const lastSpotlight = await this.db.pool.query(
           `SELECT MAX(created_at) as last_time FROM spotlights`,
         );
         if (lastSpotlight.rows[0]?.last_time) {
-          this.stats.lastSpotlightTime = new Date(lastSpotlight.rows[0].last_time).getTime();
+          this.stats.lastSpotlightTime = new Date(
+            lastSpotlight.rows[0].last_time,
+          ).getTime();
         }
-      } catch (e) { /* table may not exist */ }
+      } catch (e) {
+        /* table may not exist */
+      }
 
       try {
         const lastTx = await this.db.pool.query(
@@ -614,7 +668,9 @@ class AutonomousAgent {
         if (lastTx.rows[0]?.tx) {
           this.stats.lastSolanaTx = lastTx.rows[0].tx;
         }
-      } catch (e) { /* table may not exist */ }
+      } catch (e) {
+        /* table may not exist */
+      }
 
       this.logger.info(
         `📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.commentResponses} responses, ${this.stats.votesGiven} votes, ${this.stats.digestsGenerated} digests, ${this.stats.spotlightsGenerated} spotlights, ${this.stats.onChainLogs} on-chain logs, strategy v${this.stats.strategyVersion}`,
