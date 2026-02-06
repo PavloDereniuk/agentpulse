@@ -518,8 +518,51 @@ class AutonomousAgent {
         /* table may not exist */
       }
 
+       // Digests
+      try {
+        const digests = await this.db.pool.query(
+          `SELECT COUNT(*) FROM daily_digests`,
+        );
+        this.stats.digestsGenerated = parseInt(digests.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Spotlights
+      try {
+        const spotlights = await this.db.pool.query(
+          `SELECT COUNT(*) FROM spotlights`,
+        );
+        this.stats.spotlightsGenerated = parseInt(spotlights.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Strategy version
+      try {
+        const strategy = await this.db.pool.query(
+          `SELECT strategy_version FROM self_improvements ORDER BY created_at DESC LIMIT 1`,
+        );
+        if (strategy.rows.length > 0) {
+          this.stats.strategyVersion = strategy.rows[0].strategy_version;
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Forum comments (total responses)
+      try {
+        const comments = await this.db.pool.query(
+          `SELECT COUNT(*) FROM comment_responses WHERE status = 'responded'`,
+        );
+        this.stats.forumComments = parseInt(comments.rows[0]?.count || 0);
+        this.stats.commentResponses = this.stats.forumComments;
+      } catch (e) {
+        /* table may not exist */
+      }
+
       this.logger.info(
-        `📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.votesGiven} votes, ${this.stats.onChainLogs} on-chain logs`,
+        `📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.commentResponses} responses, ${this.stats.votesGiven} votes, ${this.stats.digestsGenerated} digests, ${this.stats.spotlightsGenerated} spotlights, ${this.stats.onChainLogs} on-chain logs, strategy v${this.stats.strategyVersion}`,
       );
     } catch (error) {
       this.logger.warn("Could not load stats from DB:", error.message);

@@ -120,7 +120,7 @@ function App() {
               <div className="stat-card">
                 <div className="stat-icon">💬</div>
                 <div className="stat-info">
-                  <span className="stat-value">{agent?.commentResponder?.responsesGenerated || 0}</span>
+                  <span className="stat-value">{agent?.commentResponses || 0}</span>
                   <span className="stat-label">Responses</span>
                 </div>
               </div>
