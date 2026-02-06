@@ -1,12 +1,12 @@
 /**
- * Voting Service
+ * Voting Service - Enhanced Version
  * 
  * Intelligently votes for quality projects in the hackathon.
  * 
  * Strategy:
- * - Analyze projects based on completeness, innovation, engagement
+ * - Hybrid evaluation: objective metrics (40%) + Claude analysis (60%)
+ * - Hackathon-friendly scoring (projects are WIP)
  * - Vote for genuinely good projects (not vote exchange!)
- * - Prioritize projects that align with ecosystem goals
  * - Rate limit to avoid spam
  * - Log all votes on-chain for transparency
  * 
@@ -31,8 +31,8 @@ export class VotingService {
     
     // Config
     this.config = {
-      maxVotesPerDay: 10,
-      minScoreToVote: 7, // out of 10
+      maxVotesPerDay: 15, // Increased from 10
+      minScoreToVote: 6, // Lowered from 7 (more realistic for hackathon)
       skipOwnProject: true,
       ownProjectId: 244, // AgentPulse project ID
     };
@@ -84,14 +84,40 @@ export class VotingService {
         evaluated++;
         this.stats.projectsEvaluated++;
 
-        // Evaluate project quality
-        const evaluation = await this.evaluateProject(project);
+        // HYBRID EVALUATION: Objective + Claude
+        const objectiveScore = this.calculateObjectiveScore(project);
+        const claudeEval = await this.evaluateWithClaude(project);
         
+        // Combine: 40% objective + 60% Claude
+        const finalScore = (objectiveScore * 0.4) + (claudeEval.score * 0.6);
+        
+        const evaluation = {
+          projectId: project.id,
+          projectName: project.name,
+          objectiveScore,
+          claudeScore: claudeEval.score,
+          finalScore: Math.round(finalScore * 10) / 10,
+          breakdown: {
+            objective: objectiveScore,
+            claude: claudeEval.score,
+            ...claudeEval.breakdown
+          },
+          reasoning: claudeEval.reasoning,
+          shouldVote: finalScore >= this.config.minScoreToVote,
+          evaluatedAt: new Date().toISOString()
+        };
+        
+        this.logger.info(
+          `Project ${project.id} (${project.name}): ` +
+          `Obj=${objectiveScore}/10, Claude=${claudeEval.score}/10, ` +
+          `Final=${evaluation.finalScore}/10`
+        );
+
         // Store evaluation
         await this.storeEvaluation(project.id, evaluation);
 
         // Vote if quality is high enough
-        if (evaluation.score >= this.config.minScoreToVote) {
+        if (evaluation.shouldVote && finalScore >= this.config.minScoreToVote) {
           const success = await this.voteForProject(project, evaluation);
           if (success) {
             voted++;
@@ -99,7 +125,7 @@ export class VotingService {
             this.stats.lastVoteTime = Date.now();
           }
         } else {
-          this.logger.info(`Project ${project.id} score ${evaluation.score}/10 - below threshold`);
+          this.logger.info(`Project ${project.id} score ${evaluation.finalScore}/10 - below threshold`);
         }
 
         // Rate limiting
@@ -117,46 +143,95 @@ export class VotingService {
   }
 
   /**
-   * Evaluate a project using Claude
+   * Calculate objective score based on completeness
+   * Returns 0-10 score
    */
-  async evaluateProject(project) {
-    const prompt = `You are AgentPulse, an autonomous analytics agent evaluating projects in the Colosseum AI Agent Hackathon.
+  calculateObjectiveScore(project) {
+    let score = 0;
 
-Evaluate this project objectively based on:
-1. **Completeness** (1-10): Is the project well-documented? Does it have a working demo?
-2. **Innovation** (1-10): Is the idea novel? Does it solve a real problem?
-3. **Technical Quality** (1-10): Is the tech stack appropriate? Is there evidence of good engineering?
-4. **Ecosystem Value** (1-10): Does it benefit the Solana/AI agent ecosystem?
-5. **Engagement** (1-10): Is the team active in the community?
+    // 1. Name and tagline (1 point)
+    if (project.name && project.name.length > 3) score += 0.5;
+    if (project.tagline && project.tagline.length > 20) score += 0.5;
+
+    // 2. Description quality (2.5 points)
+    if (project.description) {
+      if (project.description.length > 300) score += 2.5;
+      else if (project.description.length > 150) score += 1.5;
+      else if (project.description.length > 50) score += 0.5;
+    }
+
+    // 3. Demo/deployment (3 points - most important!)
+    if (project.technicalDemoLink || project.demoUrl) {
+      score += 2.0;
+      // Bonus for deployed apps (not just GitHub links)
+      const demoLink = project.technicalDemoLink || project.demoUrl || '';
+      if (demoLink.includes('vercel') || demoLink.includes('netlify') || 
+          demoLink.includes('railway') || demoLink.includes('.app') ||
+          demoLink.includes('.xyz') || demoLink.includes('.com')) {
+        score += 1.0;
+      }
+    }
+
+    // 4. GitHub repository (2 points)
+    if (project.githubUrl) {
+      score += 1.5;
+      // Bonus if not a placeholder
+      if (!project.githubUrl.includes('github.com/user') && 
+          !project.githubUrl.includes('github.com/example')) {
+        score += 0.5;
+      }
+    }
+
+    // 5. Video demo (1 point)
+    if (project.videoDemoLink) score += 1.0;
+
+    return Math.min(score, 10);
+  }
+
+  /**
+   * Evaluate project with Claude (more positive for hackathon context)
+   */
+  async evaluateWithClaude(project) {
+    const prompt = `You are AgentPulse evaluating projects in a 10-DAY AI AGENT HACKATHON on Solana.
+
+IMPORTANT CONTEXT: This is a HACKATHON, not a finished product competition. Many projects are work-in-progress. Be encouraging and focus on POTENTIAL and EFFORT, not just completeness.
 
 Project Details:
 - Name: ${project.name}
 - Tagline: ${project.tagline || 'N/A'}
 - Description: ${project.description || 'N/A'}
-- Tech Stack: ${project.techStack || 'N/A'}
 - GitHub: ${project.githubUrl ? 'Yes' : 'No'}
-- Demo: ${project.demoUrl ? 'Yes' : 'No'}
-- Team Size: ${project.teamSize || 'Unknown'}
-- Forum Activity: ${project.forumPosts || 0} posts
+- Demo: ${project.technicalDemoLink || project.demoUrl ? 'Yes' : 'No'}
+- Video: ${project.videoDemoLink ? 'Yes' : 'No'}
 
-Respond in JSON format:
+Evaluate on:
+1. **Innovation** (1-10): Is the idea interesting? Does it solve a problem?
+2. **Effort** (1-10): Can you tell the team worked hard on this?
+3. **Potential** (1-10): If finished, would this be useful?
+4. **Fit** (1-10): Does it align with AI agents + Solana?
+
+SCORING GUIDELINES (be generous for hackathon context):
+- 8-10: Excellent hackathon project, clear effort, good idea
+- 6-7: Good solid effort, functional concept
+- 4-5: Basic idea, needs work but has potential
+- 1-3: Minimal effort or unclear concept
+
+Respond in JSON:
 {
-  "completeness": <1-10>,
   "innovation": <1-10>,
-  "technicalQuality": <1-10>,
-  "ecosystemValue": <1-10>,
-  "engagement": <1-10>,
-  "overallScore": <1-10>,
-  "reasoning": "<brief 1-2 sentence explanation>",
-  "shouldVote": <true/false>
+  "effort": <1-10>,
+  "potential": <1-10>,
+  "fit": <1-10>,
+  "score": <average of above, 1-10>,
+  "reasoning": "<1-2 sentences focusing on positives and potential>"
 }
 
-Be fair and objective. Only recommend voting for genuinely good projects.`;
+Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
 
     try {
       const response = await this.anthropic.messages.create({
         model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
-        max_tokens: 500,
+        max_tokens: 400,
         messages: [{ role: 'user', content: prompt }],
       });
 
@@ -167,24 +242,31 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
       if (jsonMatch) {
         const evaluation = JSON.parse(jsonMatch[0]);
         return {
-          ...evaluation,
-          score: evaluation.overallScore,
-          projectId: project.id,
-          projectName: project.name,
-          evaluatedAt: new Date().toISOString(),
+          score: evaluation.score || 5,
+          breakdown: {
+            innovation: evaluation.innovation,
+            effort: evaluation.effort,
+            potential: evaluation.potential,
+            fit: evaluation.fit
+          },
+          reasoning: evaluation.reasoning || 'Evaluated by Claude'
         };
       }
 
       // Fallback if JSON parsing fails
       return {
         score: 5,
-        reasoning: 'Unable to fully evaluate',
-        shouldVote: false,
+        breakdown: { innovation: 5, effort: 5, potential: 5, fit: 5 },
+        reasoning: 'Unable to fully evaluate'
       };
 
     } catch (error) {
-      this.logger.error('Project evaluation failed:', error.message);
-      return { score: 0, reasoning: error.message, shouldVote: false };
+      this.logger.error('Claude evaluation failed:', error.message);
+      return { 
+        score: 5, 
+        breakdown: { innovation: 5, effort: 5, potential: 5, fit: 5 },
+        reasoning: error.message 
+      };
     }
   }
 
@@ -196,7 +278,12 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
       // Call Colosseum API to vote
       await this.api.voteForProject(project.id);
       
-      this.logger.info(`✅ Voted for "${project.name}" (score: ${evaluation.score}/10)`);
+      this.logger.info(
+        `✅ Voted for "${project.name}" ` +
+        `(final score: ${evaluation.finalScore}/10, ` +
+        `obj: ${evaluation.objectiveScore}/10, ` +
+        `claude: ${evaluation.claudeScore}/10)`
+      );
       
       // Log the vote
       await this.logVote(project, evaluation);
@@ -226,10 +313,14 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
         p.id !== this.config.ownProjectId
       );
       
-      // Sort by activity/completeness (prefer more complete projects)
+      // Sort by completeness (prefer more complete projects)
       return unvoted.sort((a, b) => {
-        const scoreA = (a.demoUrl ? 2 : 0) + (a.githubUrl ? 1 : 0) + (a.description?.length > 100 ? 1 : 0);
-        const scoreB = (b.demoUrl ? 2 : 0) + (b.githubUrl ? 1 : 0) + (b.description?.length > 100 ? 1 : 0);
+        const scoreA = (a.demoUrl || a.technicalDemoLink ? 3 : 0) + 
+                      (a.githubUrl ? 2 : 0) + 
+                      (a.description?.length > 100 ? 1 : 0);
+        const scoreB = (b.demoUrl || b.technicalDemoLink ? 3 : 0) + 
+                      (b.githubUrl ? 2 : 0) + 
+                      (b.description?.length > 100 ? 1 : 0);
         return scoreB - scoreA;
       });
 
@@ -279,13 +370,12 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
         CREATE TABLE IF NOT EXISTS project_evaluations (
           id SERIAL PRIMARY KEY,
           project_id INTEGER NOT NULL,
-          score INTEGER NOT NULL,
-          completeness INTEGER,
-          innovation INTEGER,
-          technical_quality INTEGER,
-          ecosystem_value INTEGER,
-          engagement INTEGER,
+          objective_score FLOAT,
+          claude_score FLOAT,
+          final_score FLOAT,
+          breakdown JSONB,
           reasoning TEXT,
+          should_vote BOOLEAN,
           created_at TIMESTAMP DEFAULT NOW(),
           UNIQUE(project_id)
         )
@@ -293,25 +383,24 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
 
       await this.db.pool.query(`
         INSERT INTO project_evaluations 
-        (project_id, score, completeness, innovation, technical_quality, ecosystem_value, engagement, reasoning)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        (project_id, objective_score, claude_score, final_score, breakdown, reasoning, should_vote)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (project_id) DO UPDATE SET
-          score = $2,
-          completeness = $3,
-          innovation = $4,
-          technical_quality = $5,
-          ecosystem_value = $6,
-          engagement = $7,
-          reasoning = $8
+          objective_score = $2,
+          claude_score = $3,
+          final_score = $4,
+          breakdown = $5,
+          reasoning = $6,
+          should_vote = $7,
+          created_at = NOW()
       `, [
         projectId,
-        evaluation.score,
-        evaluation.completeness,
-        evaluation.innovation,
-        evaluation.technicalQuality,
-        evaluation.ecosystemValue,
-        evaluation.engagement,
-        evaluation.reasoning
+        evaluation.objectiveScore,
+        evaluation.claudeScore,
+        evaluation.finalScore,
+        JSON.stringify(evaluation.breakdown),
+        evaluation.reasoning,
+        evaluation.shouldVote
       ]);
 
     } catch (error) {
@@ -329,7 +418,7 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
           id SERIAL PRIMARY KEY,
           project_id INTEGER NOT NULL UNIQUE,
           project_name VARCHAR(255),
-          score INTEGER,
+          score FLOAT,
           reasoning TEXT,
           created_at TIMESTAMP DEFAULT NOW()
         )
@@ -339,7 +428,12 @@ Be fair and objective. Only recommend voting for genuinely good projects.`;
         INSERT INTO project_votes (project_id, project_name, score, reasoning)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (project_id) DO NOTHING
-      `, [project.id, project.name, evaluation.score, evaluation.reasoning]);
+      `, [
+        project.id, 
+        project.name, 
+        evaluation.finalScore, 
+        evaluation.reasoning
+      ]);
 
     } catch (error) {
       this.logger.error('Failed to log vote:', error.message);
