@@ -510,8 +510,8 @@ class AutonomousAgent {
 
       // On-chain logs
       try {
-        const logs = await this.db.pool.query(
-          `SELECT COUNT(*) FROM autonomy_log WHERE details::text LIKE '%solanaTx%'`,
+         const logs = await this.db.pool.query(
+          `SELECT COUNT(*) FROM autonomy_log WHERE details::text LIKE '%solanaTx%' OR details::text LIKE '%signature%' OR details::text LIKE '%on-chain%' OR details::text LIKE '%SOLANA%'`,
         );
         this.stats.onChainLogs = parseInt(logs.rows[0]?.count || 0);
       } catch (e) {
