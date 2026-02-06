@@ -107,7 +107,7 @@ export class DatabaseService {
         posted BOOLEAN DEFAULT FALSE,
         posted_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
-      )`
+      )`,
       // Leaderboard snapshots table
       `CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
     id SERIAL PRIMARY KEY,
