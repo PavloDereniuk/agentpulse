@@ -48,17 +48,15 @@ export class LeaderboardService {
           id: p.id,
           name: p.name,
           slug: p.slug,
-          tagline: p.tagline,
-          totalVotes,
+           totalVotes,
           humanVotes: p.humanUpvotes || 0,
           agentVotes: p.agentUpvotes || 0,
           completeness,
           agentPulseScore,
-          hasDemo: !!(p.technicalDemoLink || p.demoUrl),
-          hasGithub: !!p.githubUrl,
-          hasVideo: !!p.videoDemoLink,
-          demoUrl: p.technicalDemoLink || p.demoUrl,
-          githubUrl: p.githubUrl,
+          hasDemo: !!p.presentationLink,
+          hasGithub: !!p.repoLink,
+          demoUrl: p.presentationLink,
+          githubUrl: p.repoLink,
         };
       });
 
@@ -230,36 +228,25 @@ export class LeaderboardService {
    * Calculate project completeness (0-1)
    */
   calculateCompleteness(project) {
-    let score = 0;
-    let maxScore = 0;
+      let score = 0;
+      const maxScore = 8;
 
-    // Name (required, 1pt)
-    maxScore += 1;
-    if (project.name && project.name.length > 2) score += 1;
+      // Name (1pt)
+      if (project.name && project.name.length > 2) score += 1;
 
-    // Description (2pts)
-    maxScore += 2;
-    if (project.description?.length > 300) score += 2;
-    else if (project.description?.length > 100) score += 1;
+      // Description (3pts)
+      if (project.description?.length > 300) score += 3;
+      else if (project.description?.length > 100) score += 2;
+      else if (project.description?.length > 20) score += 1;
 
-    // Tagline (1pt)
-    maxScore += 1;
-    if (project.tagline && project.tagline.length > 10) score += 1;
+      // Demo/Presentation (2pts)
+      if (project.presentationLink) score += 2;
 
-    // Demo (3pts - most important)
-    maxScore += 3;
-    if (project.technicalDemoLink || project.demoUrl) score += 3;
+      // GitHub (2pts)
+      if (project.repoLink) score += 2;
 
-    // GitHub (2pts)
-    maxScore += 2;
-    if (project.githubUrl) score += 2;
-
-    // Video (1pt)
-    maxScore += 1;
-    if (project.videoDemoLink) score += 1;
-
-    return score / maxScore;
-  }
+      return score / maxScore;
+    }
 
   /**
    * Normalize votes to 0-1 scale relative to max in the set

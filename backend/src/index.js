@@ -530,6 +530,37 @@ app.get("/api/autonomy-log", async (req, res) => {
   }
 });
 
+// Leaderboard API
+const leaderboardService = new (await import('./services/leaderboardService.js')).LeaderboardService();
+
+app.get("/api/leaderboard", async (req, res) => {
+  try {
+    const data = await leaderboardService.getLeaderboard();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/leaderboard/trends", async (req, res) => {
+  try {
+    const data = await leaderboardService.getTrends();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/leaderboard/history", async (req, res) => {
+  try {
+    const projectId = req.query.projectId ? parseInt(req.query.projectId) : null;
+    const data = await leaderboardService.getHistory(projectId);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // ============================================
 // ERROR HANDLING

@@ -43,6 +43,7 @@ class AutonomousAgent {
     this.dailyDigest = new DailyDigestService();
     this.spotlight = new SpotlightService();
     this.leaderboard = new LeaderboardService();
+    this.leaderboard = new LeaderboardService();
     this.selfImprove = new SelfImproveService();
     this.logger = new Logger('AutonomousAgent');
     this.qualityChecker = new QualityChecker();
@@ -70,6 +71,7 @@ class AutonomousAgent {
       lastDigestTime: null,
       spotlightsGenerated: 0,
       lastSpotlightTime: null,
+      leaderboardSnapshots: 0,
     };
   }
 
@@ -97,6 +99,7 @@ class AutonomousAgent {
     this.scheduleDailyReport();
     this.scheduleDailyDigest();
     this.scheduleSpotlight();
+    this.scheduleLeaderboardSnapshots();
 
     this.logger.info('✅ All autonomous loops scheduled and running');
   }
@@ -364,6 +367,19 @@ class AutonomousAgent {
   async runSpotlightManual() {
     this.logger.info('🧪 Manual trigger: Running Spotlight');
     await this.runSpotlight();
+  }
+
+   scheduleLeaderboardSnapshots() {
+    cron.schedule('0 */4 * * *', async () => {
+      if (!this.isRunning) return;
+      try {
+        await this.leaderboard.storeSnapshot();
+        this.stats.leaderboardSnapshots++;
+      } catch (e) {
+        this.logger.error('Leaderboard snapshot failed:', e.message);
+      }
+    });
+    this.logger.info('✅ Leaderboard snapshots scheduled (every 4h)');
   }
 
   /**
