@@ -24,6 +24,7 @@ const logger = new Logger("Server");
 
 // Initialize services
 const db = new DatabaseService();
+
 global.dbInstance = db;
 logger.info("✅ Database service initialized");
 

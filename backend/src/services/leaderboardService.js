@@ -1,27 +1,27 @@
 /**
  * Leaderboard Service
- * 
+ *
  * Provides real-time leaderboard analytics, trends, and rankings
  * for the AgentPulse dashboard and API.
- * 
+ *
  * Features:
  * - Project rankings with multi-metric scoring
  * - Vote trend tracking over time
  * - Category breakdowns
  * - Historical snapshots for growth charts
- * 
+ *
  * @author AgentPulse (Agent #503)
  */
 
-import { ColosseumAPI } from './colosseumAPI.js';
-import { DatabaseService } from './database.js';
-import { Logger } from '../utils/logger.js';
+import { ColosseumAPI } from "./colosseumAPI.js";
+import { DatabaseService } from "./database.js";
+import { Logger } from "../utils/logger.js";
 
 export class LeaderboardService {
   constructor() {
     this.api = new ColosseumAPI();
     this.db = new DatabaseService();
-    this.logger = new Logger('Leaderboard');
+    this.logger = new Logger("Leaderboard");
 
     this.stats = {
       snapshotsStored: 0,
@@ -36,19 +36,21 @@ export class LeaderboardService {
     try {
       const projects = await this.api.getProjects();
 
-      const ranked = projects.map(p => {
+      const ranked = projects.map((p) => {
         const totalVotes = (p.humanUpvotes || 0) + (p.agentUpvotes || 0);
         const completeness = this.calculateCompleteness(p);
         // Weighted score: 60% votes + 40% completeness
-        const agentPulseScore = Math.round(
-          (this.normalizeVotes(totalVotes, projects) * 6 + completeness * 4) * 10
-        ) / 10;
+        const agentPulseScore =
+          Math.round(
+            (this.normalizeVotes(totalVotes, projects) * 6 + completeness * 4) *
+              10,
+          ) / 10;
 
         return {
           id: p.id,
           name: p.name,
           slug: p.slug,
-           totalVotes,
+          totalVotes,
           humanVotes: p.humanUpvotes || 0,
           agentVotes: p.agentUpvotes || 0,
           completeness,
@@ -64,7 +66,9 @@ export class LeaderboardService {
       ranked.sort((a, b) => b.agentPulseScore - a.agentPulseScore);
 
       // Add rank
-      ranked.forEach((p, i) => { p.rank = i + 1; });
+      ranked.forEach((p, i) => {
+        p.rank = i + 1;
+      });
 
       return {
         projects: ranked,
@@ -72,16 +76,17 @@ export class LeaderboardService {
         updatedAt: new Date().toISOString(),
         stats: {
           totalVotes: ranked.reduce((s, p) => s + p.totalVotes, 0),
-          withDemo: ranked.filter(p => p.hasDemo).length,
-          withGithub: ranked.filter(p => p.hasGithub).length,
+          withDemo: ranked.filter((p) => p.hasDemo).length,
+          withGithub: ranked.filter((p) => p.hasGithub).length,
           avgCompleteness: Math.round(
-            ranked.reduce((s, p) => s + p.completeness, 0) / Math.max(ranked.length, 1) * 100
+            (ranked.reduce((s, p) => s + p.completeness, 0) /
+              Math.max(ranked.length, 1)) *
+              100,
           ),
         },
       };
-
     } catch (error) {
-      this.logger.error('Failed to get leaderboard:', error.message);
+      this.logger.error("Failed to get leaderboard:", error.message);
       throw error;
     }
   }
@@ -90,9 +95,15 @@ export class LeaderboardService {
    * Get trends — compare current vs previous snapshot
    */
   async getTrends() {
+    // Перевірка чи база доступна
+     if (!this.db || !this.db.pool) {
+    this.logger.warn('Database not available yet');
+    return { projects: [], movers: [] };
+    }
+
     try {
       const current = await this.getLeaderboard();
-      
+
       // Get previous snapshot from DB
       const prevSnapshot = await this.db.pool.query(`
         SELECT data FROM leaderboard_snapshots
@@ -102,7 +113,11 @@ export class LeaderboardService {
 
       if (prevSnapshot.rows.length === 0) {
         return {
-          projects: current.projects.map(p => ({ ...p, trend: 0, trendDirection: 'new' })),
+          projects: current.projects.map((p) => ({
+            ...p,
+            trend: 0,
+            trendDirection: "new",
+          })),
           movers: [],
         };
       }
@@ -110,11 +125,11 @@ export class LeaderboardService {
       const prevData = prevSnapshot.rows[0].data;
       const prevMap = new Map();
       if (prevData?.projects) {
-        prevData.projects.forEach(p => prevMap.set(p.id, p));
+        prevData.projects.forEach((p) => prevMap.set(p.id, p));
       }
 
       // Calculate trends
-      const withTrends = current.projects.map(p => {
+      const withTrends = current.projects.map((p) => {
         const prev = prevMap.get(p.id);
         const prevRank = prev?.rank || current.projects.length;
         const trend = prevRank - p.rank; // Positive = moved up
@@ -123,24 +138,25 @@ export class LeaderboardService {
           ...p,
           prevRank,
           trend,
-          trendDirection: trend > 0 ? 'up' : trend < 0 ? 'down' : 'stable',
-          voteGrowth: prev ? p.totalVotes - (prev.totalVotes || 0) : p.totalVotes,
+          trendDirection: trend > 0 ? "up" : trend < 0 ? "down" : "stable",
+          voteGrowth: prev
+            ? p.totalVotes - (prev.totalVotes || 0)
+            : p.totalVotes,
         };
       });
 
       // Biggest movers
       const movers = [...withTrends]
         .sort((a, b) => Math.abs(b.trend) - Math.abs(a.trend))
-        .filter(p => p.trend !== 0)
+        .filter((p) => p.trend !== 0)
         .slice(0, 5);
 
       return {
         projects: withTrends,
         movers,
       };
-
     } catch (error) {
-      this.logger.error('Failed to get trends:', error.message);
+      this.logger.error("Failed to get trends:", error.message);
       return { projects: [], movers: [] };
     }
   }
@@ -162,13 +178,15 @@ export class LeaderboardService {
 
       await this.db.pool.query(
         `INSERT INTO leaderboard_snapshots (data) VALUES ($1)`,
-        [JSON.stringify(leaderboard)]
+        [JSON.stringify(leaderboard)],
       );
 
       this.stats.snapshotsStored++;
       this.stats.lastSnapshotTime = Date.now();
 
-      this.logger.info(`📸 Leaderboard snapshot stored (${leaderboard.total} projects)`);
+      this.logger.info(
+        `📸 Leaderboard snapshot stored (${leaderboard.total} projects)`,
+      );
 
       // Cleanup old snapshots (keep last 50)
       await this.db.pool.query(`
@@ -179,9 +197,8 @@ export class LeaderboardService {
           LIMIT 50
         )
       `);
-
     } catch (error) {
-      this.logger.error('Failed to store snapshot:', error.message);
+      this.logger.error("Failed to store snapshot:", error.message);
     }
   }
 
@@ -190,16 +207,19 @@ export class LeaderboardService {
    */
   async getHistory(projectId = null, limit = 24) {
     try {
-      const snapshots = await this.db.pool.query(`
+      const snapshots = await this.db.pool.query(
+        `
         SELECT data, created_at 
         FROM leaderboard_snapshots
         ORDER BY created_at DESC
         LIMIT $1
-      `, [limit]);
+      `,
+        [limit],
+      );
 
       if (!projectId) {
         // Return overall stats history
-        return snapshots.rows.reverse().map(row => ({
+        return snapshots.rows.reverse().map((row) => ({
           timestamp: row.created_at,
           totalProjects: row.data?.total || 0,
           totalVotes: row.data?.stats?.totalVotes || 0,
@@ -208,18 +228,20 @@ export class LeaderboardService {
       }
 
       // Return specific project history
-      return snapshots.rows.reverse().map(row => {
-        const project = row.data?.projects?.find(p => p.id === projectId);
-        return {
-          timestamp: row.created_at,
-          rank: project?.rank || null,
-          votes: project?.totalVotes || 0,
-          score: project?.agentPulseScore || 0,
-        };
-      }).filter(d => d.rank !== null);
-
+      return snapshots.rows
+        .reverse()
+        .map((row) => {
+          const project = row.data?.projects?.find((p) => p.id === projectId);
+          return {
+            timestamp: row.created_at,
+            rank: project?.rank || null,
+            votes: project?.totalVotes || 0,
+            score: project?.agentPulseScore || 0,
+          };
+        })
+        .filter((d) => d.rank !== null);
     } catch (error) {
-      this.logger.error('Failed to get history:', error.message);
+      this.logger.error("Failed to get history:", error.message);
       return [];
     }
   }
@@ -228,33 +250,33 @@ export class LeaderboardService {
    * Calculate project completeness (0-1)
    */
   calculateCompleteness(project) {
-      let score = 0;
-      const maxScore = 8;
+    let score = 0;
+    const maxScore = 8;
 
-      // Name (1pt)
-      if (project.name && project.name.length > 2) score += 1;
+    // Name (1pt)
+    if (project.name && project.name.length > 2) score += 1;
 
-      // Description (3pts)
-      if (project.description?.length > 300) score += 3;
-      else if (project.description?.length > 100) score += 2;
-      else if (project.description?.length > 20) score += 1;
+    // Description (3pts)
+    if (project.description?.length > 300) score += 3;
+    else if (project.description?.length > 100) score += 2;
+    else if (project.description?.length > 20) score += 1;
 
-      // Demo/Presentation (2pts)
-      if (project.presentationLink) score += 2;
+    // Demo/Presentation (2pts)
+    if (project.presentationLink) score += 2;
 
-      // GitHub (2pts)
-      if (project.repoLink) score += 2;
+    // GitHub (2pts)
+    if (project.repoLink) score += 2;
 
-      return score / maxScore;
-    }
+    return score / maxScore;
+  }
 
   /**
    * Normalize votes to 0-1 scale relative to max in the set
    */
   normalizeVotes(votes, allProjects) {
     const maxVotes = Math.max(
-      ...allProjects.map(p => (p.humanUpvotes || 0) + (p.agentUpvotes || 0)),
-      1
+      ...allProjects.map((p) => (p.humanUpvotes || 0) + (p.agentUpvotes || 0)),
+      1,
     );
     return votes / maxVotes;
   }
