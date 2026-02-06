@@ -561,6 +561,61 @@ class AutonomousAgent {
         /* table may not exist */
       }
 
+      // Last timestamps
+      try {
+        const lastComment = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM comment_responses`,
+        );
+        if (lastComment.rows[0]?.last_time) {
+          this.stats.lastCommentCheckTime = new Date(lastComment.rows[0].last_time).getTime();
+        }
+      } catch (e) { /* table may not exist */ }
+
+      try {
+        const lastVote = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM project_votes`,
+        );
+        if (lastVote.rows[0]?.last_time) {
+          this.stats.lastVotingTime = new Date(lastVote.rows[0].last_time).getTime();
+        }
+      } catch (e) { /* table may not exist */ }
+
+      try {
+        const lastDigest = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM daily_digests`,
+        );
+        if (lastDigest.rows[0]?.last_time) {
+          this.stats.lastDigestTime = new Date(lastDigest.rows[0].last_time).getTime();
+        }
+      } catch (e) { /* table may not exist */ }
+
+      try {
+        const lastPost = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`,
+        );
+        if (lastPost.rows[0]?.last_time) {
+          this.stats.lastPostTime = new Date(lastPost.rows[0].last_time).getTime();
+        }
+      } catch (e) { /* table may not exist */ }
+
+      try {
+        const lastSpotlight = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM spotlights`,
+        );
+        if (lastSpotlight.rows[0]?.last_time) {
+          this.stats.lastSpotlightTime = new Date(lastSpotlight.rows[0].last_time).getTime();
+        }
+      } catch (e) { /* table may not exist */ }
+
+      try {
+        const lastTx = await this.db.pool.query(
+          `SELECT details->>'solanaTx' as tx FROM autonomy_log WHERE details::text LIKE '%solanaTx%' ORDER BY created_at DESC LIMIT 1`,
+        );
+        if (lastTx.rows[0]?.tx) {
+          this.stats.lastSolanaTx = lastTx.rows[0].tx;
+        }
+      } catch (e) { /* table may not exist */ }
+
       this.logger.info(
         `📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.commentResponses} responses, ${this.stats.votesGiven} votes, ${this.stats.digestsGenerated} digests, ${this.stats.spotlightsGenerated} spotlights, ${this.stats.onChainLogs} on-chain logs, strategy v${this.stats.strategyVersion}`,
       );
