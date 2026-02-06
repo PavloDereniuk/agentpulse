@@ -63,8 +63,8 @@ export class CommentResponder {
 
     try {
       // 1. Get our posts
-      const myPosts = await this.api.getMyPosts({ sort: 'new', limit: 20 });
-      const posts = myPosts.posts || [];
+      const myPostsData = await this.api.getMyPosts({ sort: 'new', limit: 20 });
+      const posts = myPostsData.posts || [];
       
       if (posts.length === 0) {
         this.logger.info('No posts found');

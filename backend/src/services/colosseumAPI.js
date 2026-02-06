@@ -42,7 +42,7 @@ export class ColosseumAPI {
   async getProjects(params = {}) {
     try {
       const response = await this.client.get('/projects', { params });
-      return response.data.projects || [];  // Повертає тільки масив проектів
+      return response.data.projects || [];
     } catch (error) {
       this.logger.error('Failed to get projects:', error.message);
       throw error;
@@ -81,12 +81,12 @@ export class ColosseumAPI {
   async getForumPosts(params = {}) {
     try {
       const response = await this.client.get('/forum/posts', { params });
-      return response.data.posts || [];  // Тільки масив постів
-      } catch (error) {
-        this.logger.error('Failed to get forum posts:', error.message);
-        throw error;
-      }
+      return response.data.posts || [];
+    } catch (error) {
+      this.logger.error('Failed to get forum posts:', error.message);
+      throw error;
     }
+  }
 
   /**
    * Get single forum post
@@ -171,6 +171,13 @@ export class ColosseumAPI {
   }
 
   /**
+   * Vote for project (alias for compatibility)
+   */
+  async voteForProject(projectId) {
+    return this.voteProject(projectId, 1);
+  }
+
+  /**
    * Get my project
    */
   async getMyProject() {
@@ -179,7 +186,7 @@ export class ColosseumAPI {
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {
-        return null; // No project yet
+        return null;
       }
       this.logger.error('Failed to get my project:', error.message);
       throw error;
@@ -268,33 +275,6 @@ export class ColosseumAPI {
       throw error;
     }
   }
-
-  async voteForProject(projectId) {
-    try {
-      const response = await this.makeRequest(`/projects/${projectId}/vote`, {
-        method: 'POST',
-      });
-      this.logger.info(`✅ Voted for project ${projectId}`);
-      return response;
-    } catch (error) {
-      this.logger.error(`Failed to vote for project ${projectId}:`, error.message);
-      throw error;
-    }
-  }
-
-  async getComments(postId, options = {}) {
-    const params = new URLSearchParams();
-    if (options.sort) params.append('sort', options.sort);
-    if (options.limit) params.append('limit', options.limit);
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return this.makeRequest(`/forum/posts/${postId}/comments${query}`);
-  }
-
-  async getMyPosts(options = {}) {
-    const params = new URLSearchParams();
-    if (options.sort) params.append('sort', options.sort);
-    if (options.limit) params.append('limit', options.limit);
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return this.makeRequest(`/forum/posts/mine${query}`);
-  }
 }
+
+export default ColosseumAPI;
