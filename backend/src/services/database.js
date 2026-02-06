@@ -1,17 +1,17 @@
 /**
  * Database Service
- * 
+ *
  * Handles all database operations
  */
 
-import pg from 'pg';
-import { Logger } from '../utils/logger.js';
+import pg from "pg";
+import { Logger } from "../utils/logger.js";
 
 const { Pool } = pg;
 
 export class DatabaseService {
   constructor() {
-    this.logger = new Logger('Database');
+    this.logger = new Logger("Database");
     this.pool = null;
     this.initialize();
   }
@@ -23,28 +23,29 @@ export class DatabaseService {
     try {
       // Only initialize if DATABASE_URL is provided
       if (!process.env.DATABASE_URL) {
-        this.logger.warn('⚠️  DATABASE_URL not set - database features disabled');
+        this.logger.warn(
+          "⚠️  DATABASE_URL not set - database features disabled",
+        );
         return;
       }
 
       this.pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
-          rejectUnauthorized: false
-        }
+          rejectUnauthorized: false,
+        },
       });
 
       // Test connection
       const client = await this.pool.connect();
-      this.logger.info('✅ Database connected');
+      this.logger.info("✅ Database connected");
       client.release();
 
       // Create tables if they don't exist
       await this.createTables();
-
     } catch (error) {
-      this.logger.error('❌ Database connection failed:', error.message);
-      this.logger.warn('⚠️  Database features will be disabled');
+      this.logger.error("❌ Database connection failed:", error.message);
+      this.logger.warn("⚠️  Database features will be disabled");
       this.pool = null;
     }
   }
@@ -107,17 +108,59 @@ export class DatabaseService {
         posted_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
       )`
+      // Leaderboard snapshots table
+      `CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
+    id SERIAL PRIMARY KEY,
+    data JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+  )`,
+
+      // Comment responses table
+      `CREATE TABLE IF NOT EXISTS comment_responses (
+    id SERIAL PRIMARY KEY,
+    post_id INTEGER NOT NULL,
+    comment_id INTEGER NOT NULL,
+    response_id INTEGER,
+    status VARCHAR(50) NOT NULL,
+    reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(post_id, comment_id)
+  )`,
+
+      // Project votes table
+      `CREATE TABLE IF NOT EXISTS project_votes (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL UNIQUE,
+    project_name VARCHAR(255),
+    score INTEGER,
+    reasoning TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  )`,
+
+      // Project evaluations table
+      `CREATE TABLE IF NOT EXISTS project_evaluations (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL UNIQUE,
+    score INTEGER NOT NULL,
+    completeness INTEGER,
+    innovation INTEGER,
+    technical_quality INTEGER,
+    ecosystem_value INTEGER,
+    engagement INTEGER,
+    reasoning TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  )`,
     ];
 
     for (const query of queries) {
       try {
         await this.pool.query(query);
       } catch (error) {
-        this.logger.error('Failed to create table:', error.message);
+        this.logger.error("Failed to create table:", error.message);
       }
     }
 
-    this.logger.info('✅ Database tables ready');
+    this.logger.info("✅ Database tables ready");
   }
 
   /**
@@ -148,13 +191,13 @@ export class DatabaseService {
             project.status,
             project.humanUpvotes || 0,
             project.agentUpvotes || 0,
-            JSON.stringify(project)
-          ]
+            JSON.stringify(project),
+          ],
         );
       }
       this.logger.info(`✅ Stored ${projects.length} projects`);
     } catch (error) {
-      this.logger.error('Failed to store projects:', error.message);
+      this.logger.error("Failed to store projects:", error.message);
     }
   }
 
@@ -186,13 +229,13 @@ export class DatabaseService {
             post.downvotes || 0,
             post.commentCount || 0,
             JSON.stringify(post),
-            post.createdAt
-          ]
+            post.createdAt,
+          ],
         );
       }
       this.logger.info(`✅ Stored ${posts.length} forum posts`);
     } catch (error) {
-      this.logger.error('Failed to store forum posts:', error.message);
+      this.logger.error("Failed to store forum posts:", error.message);
     }
   }
 
@@ -212,11 +255,11 @@ export class DatabaseService {
 
     try {
       await this.pool.query(
-        'INSERT INTO autonomy_log (action, details, outcome, created_at) VALUES ($1, $2, $3, NOW())',
-        [action.action, JSON.stringify(action), action.outcome || 'PENDING']
+        "INSERT INTO autonomy_log (action, details, outcome, created_at) VALUES ($1, $2, $3, NOW())",
+        [action.action, JSON.stringify(action), action.outcome || "PENDING"],
       );
     } catch (error) {
-      this.logger.error('Failed to log action:', error.message);
+      this.logger.error("Failed to log action:", error.message);
     }
   }
 
@@ -232,11 +275,11 @@ export class DatabaseService {
          WHERE agent_name = $1 
          AND created_at > NOW() - INTERVAL '${hours} hours'
          ORDER BY created_at DESC`,
-        [process.env.AGENT_NAME || 'agentpulse']
+        [process.env.AGENT_NAME || "agentpulse"],
       );
       return result.rows;
     } catch (error) {
-      this.logger.error('Failed to get recent posts:', error.message);
+      this.logger.error("Failed to get recent posts:", error.message);
       return [];
     }
   }
@@ -252,11 +295,13 @@ export class DatabaseService {
         `SELECT MAX(created_at) as last_post 
          FROM forum_posts 
          WHERE agent_name = $1`,
-        [process.env.AGENT_NAME || 'agentpulse']
+        [process.env.AGENT_NAME || "agentpulse"],
       );
-      return result.rows[0]?.last_post ? new Date(result.rows[0].last_post).getTime() : null;
+      return result.rows[0]?.last_post
+        ? new Date(result.rows[0].last_post).getTime()
+        : null;
     } catch (error) {
-      this.logger.error('Failed to get last post time:', error.message);
+      this.logger.error("Failed to get last post time:", error.message);
       return null;
     }
   }
@@ -273,11 +318,11 @@ export class DatabaseService {
          FROM forum_posts 
          WHERE agent_name = $1 
          AND DATE(created_at) = CURRENT_DATE`,
-        [process.env.AGENT_NAME || 'agentpulse']
+        [process.env.AGENT_NAME || "agentpulse"],
       );
       return parseInt(result.rows[0]?.count || 0);
     } catch (error) {
-      this.logger.error('Failed to get today post count:', error.message);
+      this.logger.error("Failed to get today post count:", error.message);
       return 0;
     }
   }
@@ -294,11 +339,11 @@ export class DatabaseService {
          FROM insights 
          WHERE title ILIKE $1 
          AND created_at > NOW() - INTERVAL '7 days'`,
-        [`%${insight.title}%`]
+        [`%${insight.title}%`],
       );
       return parseInt(result.rows[0]?.count || 0) > 0;
     } catch (error) {
-      this.logger.error('Failed to check duplicate insight:', error.message);
+      this.logger.error("Failed to check duplicate insight:", error.message);
       return false;
     }
   }
@@ -317,7 +362,7 @@ export class DatabaseService {
   async close() {
     if (this.pool) {
       await this.pool.end();
-      this.logger.info('Database connection closed');
+      this.logger.info("Database connection closed");
     }
   }
 }
