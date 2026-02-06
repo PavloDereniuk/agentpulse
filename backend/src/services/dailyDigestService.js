@@ -121,7 +121,7 @@ export class DailyDigestService {
             slug: project.slug,
             currentVotes,
             growth: currentVotes - prevVotes,
-            description: project.tagline || project.description?.substring(0, 80),
+            description: project.description?.substring(0, 80),
           };
         })
         .filter(p => p.growth > 0)
@@ -146,12 +146,12 @@ export class DailyDigestService {
 
       // Filter for projects that have substance but low votes
       const candidates = projects.filter(p => {
-        const hasDemo = !!(p.technicalDemoLink || p.demoUrl);
-        const hasGithub = !!p.githubUrl;
+        const hasDemo = !!p.presentationLink;
+        const hasGithub = !!p.repoLink;
         const hasDescription = p.description && p.description.length > 100;
         const totalVotes = (p.humanUpvotes || 0) + (p.agentUpvotes || 0);
-        const isComplete = hasDemo && hasGithub && hasDescription;
-        const isLowVotes = totalVotes < 10;
+        const isComplete = (hasDemo || hasGithub) && hasDescription;
+        const isLowVotes = totalVotes < 30;
 
         return isComplete && isLowVotes && p.id !== 244; // Skip own project
       });
@@ -162,7 +162,7 @@ export class DailyDigestService {
       const prompt = `You are AgentPulse analyzing hackathon projects. Pick the top 3 most interesting "Hidden Gem" projects from this list. These are quality projects that deserve more attention.
 
 Projects:
-${candidates.slice(0, 15).map(p => `- "${p.name}": ${p.tagline || p.description?.substring(0, 100) || 'No description'} | Votes: ${(p.humanUpvotes || 0) + (p.agentUpvotes || 0)} | Has demo: ${!!(p.technicalDemoLink || p.demoUrl)}`).join('\n')}
+${candidates.slice(0, 15).map(p => `- "${p.name}": ${p.description?.substring(0, 100) || 'No description'} | Votes: ${(p.humanUpvotes || 0) + (p.agentUpvotes || 0)} | GitHub: ${!!p.repoLink}`).join('\n')}
 
 For each pick, respond in JSON array:
 [{"name": "...", "reason": "1 sentence why it's interesting"}]
@@ -273,8 +273,8 @@ Be specific and enthusiastic. Focus on innovation and potential.`;
         sum + (p.humanUpvotes || 0) + (p.agentUpvotes || 0), 0
       );
 
-      const withDemo = projects.filter(p => p.technicalDemoLink || p.demoUrl).length;
-      const withGithub = projects.filter(p => p.githubUrl).length;
+      const withDemo = projects.filter(p => p.presentationLink).length;
+      const withGithub = projects.filter(p => p.repoLink).length;
 
       // Days remaining
       const deadline = new Date('2026-02-12T23:59:59Z');
@@ -310,10 +310,9 @@ Be specific and enthusiastic. Focus on innovation and potential.`;
         .map(p => ({
           name: p.name,
           votes: (p.humanUpvotes || 0) + (p.agentUpvotes || 0),
-          hasDemo: !!(p.technicalDemoLink || p.demoUrl),
-          hasGithub: !!p.githubUrl,
-          hasVideo: !!p.videoDemoLink,
-          description: p.tagline || p.description?.substring(0, 100),
+          hasDemo: !!p.presentationLink,
+          hasGithub: !!p.repoLink,
+          description: p.description?.substring(0, 100),
         }))
         .sort((a, b) => b.votes - a.votes)
         .slice(0, 10);
