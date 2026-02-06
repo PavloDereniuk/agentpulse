@@ -43,7 +43,6 @@ class AutonomousAgent {
     this.dailyDigest = new DailyDigestService();
     this.spotlight = new SpotlightService();
     this.leaderboard = new LeaderboardService();
-    this.leaderboard = new LeaderboardService();
     this.selfImprove = new SelfImproveService();
     this.logger = new Logger("AutonomousAgent");
     this.qualityChecker = new QualityChecker();
@@ -98,7 +97,6 @@ class AutonomousAgent {
     this.scheduleHourlyAnalysis();
     this.scheduleCommentResponses();
     this.scheduleVoting();
-    this.scheduleDailyReport();
     this.scheduleDailyDigest();
     this.scheduleSpotlight();
     this.scheduleLeaderboardSnapshots();
@@ -201,20 +199,6 @@ class AutonomousAgent {
     });
 
     this.logger.info("✅ Voting scheduled (every 4 hours)");
-  }
-
-  /**
-   * Daily Report Loop - 9 AM UTC
-   */
-  scheduleDailyReport() {
-    cron.schedule("0 9 * * *", async () => {
-      if (!this.isRunning) return;
-
-      this.logger.info("📝 Generating daily report...");
-      await this.generateDailyReport();
-    });
-
-    this.logger.info("✅ Daily report scheduled (9 AM UTC)");
   }
 
   /**
@@ -692,7 +676,7 @@ class AutonomousAgent {
     const checks = {
       qualityPasses: qualityScore.score >= 6,
       notTooFrequent: timeSinceLastPost >= 3600000,
-      dailyLimit: this.stats.forumPosts < 5,
+      dailyLimit: (await this.db.getTodayPostCount()) < 5,
       hasActionableValue: !!insight.actionable && insight.actionable.length > 0,
       isNovel: !(await this.db.isDuplicateInsight(insight)),
     };

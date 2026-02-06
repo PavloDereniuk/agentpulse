@@ -222,7 +222,7 @@ app.get("/api/solana/on-chain-logs", async (req, res) => {
     // Get from database
     const logs = await db.pool.query(`
       SELECT * FROM autonomy_log 
-      WHERE solana_tx IS NOT NULL 
+      WHERE details::text LIKE '%solanaTx%'
       ORDER BY created_at DESC 
       LIMIT 50
     `);
@@ -303,7 +303,7 @@ app.post("/api/trigger-comments", async (req, res) => {
   }
 
   try {
-    logger.info("рџ§Є Manual comment response trigger requested");
+    logger.info("🧪 Manual comment response trigger requested");
     await agent.runCommentResponses();
     res.json({
       success: true,
@@ -326,7 +326,7 @@ app.post("/api/trigger-voting", async (req, res) => {
   }
 
   try {
-    logger.info("рџ§Є Manual voting trigger requested");
+    logger.info("🧪 Manual voting trigger requested");
     await agent.runVoting();
     res.json({
       success: true,
@@ -406,77 +406,6 @@ app.get("/api/comment-responses", async (req, res) => {
 // ============================================
 // DATA ENDPOINTS
 // ============================================
-
-/**
- * GET /api/projects
- * Get all projects with analytics
- */
-app.get("/api/projects", async (req, res) => {
-  try {
-    // Implementation needed
-    res.json({ projects: [] });
-  } catch (error) {
-    logger.error("Error fetching projects:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-/**
- * GET /api/agents
- * Get agent network data
- */
-app.get("/api/agents", async (req, res) => {
-  try {
-    // Implementation needed
-    res.json({ agents: [] });
-  } catch (error) {
-    logger.error("Error fetching agents:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-/**
- * GET /api/insights
- * Get latest insights
- */
-app.get("/api/insights", async (req, res) => {
-  try {
-    const { limit = 20 } = req.query;
-    // Implementation needed
-    res.json({ insights: [] });
-  } catch (error) {
-    logger.error("Error fetching insights:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-/**
- * GET /api/trends
- * Get trending topics and patterns
- */
-app.get("/api/trends", async (req, res) => {
-  try {
-    // Implementation needed
-    res.json({ trends: [] });
-  } catch (error) {
-    logger.error("Error fetching trends:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-/**
- * GET /api/predictions
- * Get leaderboard predictions
- */
-app.get("/api/predictions", async (req, res) => {
-  try {
-    // Implementation needed
-    res.json({ predictions: [] });
-  } catch (error) {
-    logger.error("Error fetching predictions:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
 
 /**
  * GET /api/autonomy-log

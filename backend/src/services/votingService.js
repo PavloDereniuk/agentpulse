@@ -161,10 +161,10 @@ export class VotingService {
     }
 
     // 3. Demo/deployment (3 points - most important!)
-    if (project.technicalDemoLink || project.demoUrl) {
+    if (project.presentationLink || project.presentationLink) {
       score += 2.0;
       // Bonus for deployed apps (not just GitHub links)
-      const demoLink = project.technicalDemoLink || project.demoUrl || '';
+      const demoLink = project.presentationLink || project.presentationLink || '';
       if (demoLink.includes('vercel') || demoLink.includes('netlify') || 
           demoLink.includes('railway') || demoLink.includes('.app') ||
           demoLink.includes('.xyz') || demoLink.includes('.com')) {
@@ -173,17 +173,17 @@ export class VotingService {
     }
 
     // 4. GitHub repository (2 points)
-    if (project.githubUrl) {
+    if (project.repoLink) {
       score += 1.5;
       // Bonus if not a placeholder
-      if (!project.githubUrl.includes('github.com/user') && 
-          !project.githubUrl.includes('github.com/example')) {
+      if (!project.repoLink.includes('github.com/user') && 
+          !project.repoLink.includes('github.com/example')) {
         score += 0.5;
       }
     }
 
     // 5. Video demo (1 point)
-    if (project.videoDemoLink) score += 1.0;
+    if (project.presentationLink) score += 1.0;
 
     return Math.min(score, 10);
   }
@@ -200,9 +200,9 @@ Project Details:
 - Name: ${project.name}
 - Tagline: ${project.tagline || 'N/A'}
 - Description: ${project.description || 'N/A'}
-- GitHub: ${project.githubUrl ? 'Yes' : 'No'}
-- Demo: ${project.technicalDemoLink || project.demoUrl ? 'Yes' : 'No'}
-- Video: ${project.videoDemoLink ? 'Yes' : 'No'}
+- GitHub: ${project.repoLink ? 'Yes' : 'No'}
+- Demo: ${project.presentationLink || project.presentationLink ? 'Yes' : 'No'}
+- Video: ${project.presentationLink ? 'Yes' : 'No'}
 
 Evaluate on:
 1. **Innovation** (1-10): Is the idea interesting? Does it solve a problem?

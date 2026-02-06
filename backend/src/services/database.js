@@ -136,20 +136,6 @@ export class DatabaseService {
     reasoning TEXT,
     created_at TIMESTAMP DEFAULT NOW()
   )`,
-
-      // Project evaluations table
-      `CREATE TABLE IF NOT EXISTS project_evaluations (
-    id SERIAL PRIMARY KEY,
-    project_id INTEGER NOT NULL UNIQUE,
-    score INTEGER NOT NULL,
-    completeness INTEGER,
-    innovation INTEGER,
-    technical_quality INTEGER,
-    ecosystem_value INTEGER,
-    engagement INTEGER,
-    reasoning TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-  )`,
     ];
 
     for (const query of queries) {

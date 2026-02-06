@@ -103,7 +103,6 @@ export class SpotlightService {
       const scored = eligible.map(p => {
         let score = 0;
 
-        // Completeness (max 4)
         // Completeness (max 3)
         if (p.presentationLink) score += 2;
         if (p.repoLink) score += 1;
