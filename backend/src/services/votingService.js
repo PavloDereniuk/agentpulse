@@ -16,12 +16,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ColosseumAPI } from './colosseumAPI.js';
 import { DatabaseService } from './database.js';
+import { SolanaService } from './solanaService.js';
 import { Logger } from '../utils/logger.js';
 
 export class VotingService {
   constructor() {
     this.api = new ColosseumAPI();
     this.db = new DatabaseService();
+    this.solana = new SolanaService();
     this.logger = new Logger('VotingService');
     
     // Initialize Claude for project evaluation
@@ -285,8 +287,39 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
         `claude: ${evaluation.claudeScore}/10)`
       );
       
-      // Log the vote
+      // Log the vote to database
       await this.logVote(project, evaluation);
+      
+      // Log vote on-chain for transparency
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: 'VOTE',
+            summary: `Voted for ${project.name} (score: ${evaluation.finalScore}/10)`,
+            metadata: {
+              projectId: project.id,
+              projectName: project.name,
+              score: evaluation.finalScore,
+              objectiveScore: evaluation.objectiveScore,
+              claudeScore: evaluation.claudeScore
+            }
+          });
+          
+          this.logger.info(`📝 Vote logged on-chain: ${solanaTx.signature.slice(0, 16)}...`);
+          
+          // Update vote record with Solana signature
+          await this.db.pool.query(`
+            UPDATE project_votes 
+            SET solana_tx = $1 
+            WHERE project_id = $2
+          `, [solanaTx.signature, project.id]);
+          
+        } catch (solanaError) {
+          this.logger.warn('Failed to log vote on-chain:', solanaError.message);
+          // Continue - voting succeeded even if on-chain log failed
+        }
+      }
       
       return true;
 
@@ -420,6 +453,7 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
           project_name VARCHAR(255),
           score FLOAT,
           reasoning TEXT,
+          solana_tx VARCHAR(255),
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);

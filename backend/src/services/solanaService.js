@@ -19,6 +19,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
+import crypto from 'crypto';
 import { Logger } from '../utils/logger.js';
 
 // Memo Program ID (official Solana Memo Program)
@@ -200,6 +201,21 @@ export class SolanaService {
   }
 
   /**
+   * Create SHA256 hash of action data
+   * @param {Object} action - Action to hash
+   * @returns {string} - Hex hash
+   */
+  createActionHash(action) {
+    const actionString = JSON.stringify({
+      type: action.type,
+      summary: action.summary,
+      timestamp: action.timestamp || Date.now(),
+      metadata: action.metadata || {},
+    });
+    return crypto.createHash('sha256').update(actionString).digest('hex');
+  }
+
+  /**
    * Log an autonomous action on-chain via Memo transaction
    * This creates a verifiable proof of the agent's action
    * 
@@ -207,7 +223,7 @@ export class SolanaService {
    * @param {string} action.type - Action type (e.g., 'FORUM_POST', 'INSIGHT', 'DATA_COLLECTION')
    * @param {string} action.summary - Short summary (max 500 chars for memo)
    * @param {Object} action.metadata - Additional metadata
-   * @returns {Promise<{signature: string, explorerUrl: string}>}
+   * @returns {Promise<{signature: string, explorerUrl: string, hash: string}>}
    */
   async logActionOnChain(action) {
     if (!this.canWrite()) {
@@ -216,12 +232,24 @@ export class SolanaService {
     }
 
     try {
+      const timestamp = Date.now();
+      const actionData = {
+        type: action.type,
+        summary: action.summary,
+        timestamp,
+        metadata: action.metadata,
+      };
+
+      // Create SHA256 hash for verification
+      const actionHash = this.createActionHash(actionData);
+
       // Create memo content (keep it concise for on-chain storage)
       const memoContent = JSON.stringify({
         agent: 'AgentPulse#503',
         type: action.type,
         summary: action.summary?.slice(0, 200), // Limit length
-        ts: Date.now(),
+        hash: actionHash.slice(0, 16), // First 16 chars of hash
+        ts: timestamp,
         ...action.metadata,
       });
 
@@ -260,13 +288,15 @@ export class SolanaService {
       const explorerUrl = this.getExplorerUrl(signature);
       
       this.logger.info(`✅ Action logged on-chain: ${signature.slice(0, 16)}...`);
+      this.logger.info(`   Hash: ${actionHash.slice(0, 16)}...`);
       this.logger.info(`   Explorer: ${explorerUrl}`);
 
       return {
         signature,
         explorerUrl,
         memoContent,
-        timestamp: new Date().toISOString(),
+        hash: actionHash,
+        timestamp: new Date(timestamp).toISOString(),
       };
     } catch (error) {
       this.logger.error('❌ Failed to log action on-chain:', error.message);
@@ -322,6 +352,109 @@ export class SolanaService {
     } catch (error) {
       this.logger.error('Airdrop failed:', error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Get all on-chain proof logs from agent's memo transactions
+   * This reads actual blockchain data and parses memo content
+   * 
+   * @param {number} limit - Max transactions to fetch
+   * @returns {Promise<Array>} Array of parsed proof logs
+   */
+  async getOnChainProofs(limit = 50) {
+    if (!this.walletPublicKey) {
+      this.logger.warn('⚠️ No wallet configured for reading proofs');
+      return [];
+    }
+
+    try {
+      const publicKey = new PublicKey(this.walletPublicKey);
+      
+      // Get recent transactions
+      const signatures = await this.connection.getSignaturesForAddress(
+        publicKey,
+        { limit }
+      );
+
+      const proofs = [];
+
+      // Fetch and parse each transaction with rate limiting
+      for (let i = 0; i < signatures.length; i++) {
+        const sigInfo = signatures[i];
+        
+        // Add delay every 5 requests to avoid rate limits
+        if (i > 0 && i % 5 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 300)); // 300ms pause
+        }
+        
+        try {
+          const tx = await this.connection.getTransaction(sigInfo.signature, {
+            maxSupportedTransactionVersion: 0,
+          });
+
+          if (!tx || !tx.transaction) continue;
+
+          // Look for memo instruction
+          const memoInstruction = tx.transaction.message.instructions.find(
+            (inst) => {
+              const programId = tx.transaction.message.staticAccountKeys?.[inst.programIdIndex];
+              return programId && programId.equals(MEMO_PROGRAM_ID);
+            }
+          );
+
+          if (memoInstruction) {
+            // Parse memo data
+            const memoData = Buffer.from(memoInstruction.data).toString('utf8');
+            
+            try {
+              const parsed = JSON.parse(memoData);
+              
+              // Only include AgentPulse memos
+              if (parsed.agent === 'AgentPulse#503') {
+                proofs.push({
+                  signature: sigInfo.signature,
+                  slot: tx.slot,
+                  blockTime: tx.blockTime,
+                  timestamp: tx.blockTime ? new Date(tx.blockTime * 1000).toISOString() : null,
+                  type: parsed.type,
+                  summary: parsed.summary,
+                  hash: parsed.hash,
+                  metadata: {
+                    ...parsed,
+                    agent: undefined,
+                    type: undefined,
+                    summary: undefined,
+                    hash: undefined,
+                    ts: undefined,
+                  },
+                  explorerUrl: this.getExplorerUrl(sigInfo.signature),
+                  verified: true, // Transaction exists on-chain = verified
+                });
+              }
+              // Skip non-AgentPulse memos silently
+            } catch (parseError) {
+              // Not JSON or malformed - skip silently (could be other memo programs)
+              // Only log in debug mode
+              if (process.env.DEBUG_SOLANA === 'true') {
+                this.logger.warn(`Failed to parse memo in ${sigInfo.signature}`);
+              }
+            }
+          }
+        } catch (txError) {
+          // Failed to fetch this specific transaction - skip
+          this.logger.warn(`Failed to fetch tx ${sigInfo.signature}:`, txError.message);
+        }
+      }
+
+      this.stats.totalReads += signatures.length;
+      
+      this.logger.info(`✅ Retrieved ${proofs.length} on-chain proofs`);
+      return proofs;
+
+    } catch (error) {
+      this.logger.error('❌ Failed to get on-chain proofs:', error.message);
+      return [];
     }
   }
 

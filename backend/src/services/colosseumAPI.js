@@ -2,6 +2,7 @@
  * Colosseum API Service
  * 
  * Wrapper for all Colosseum API interactions
+ * Updated with verified working endpoints
  */
 
 import axios from 'axios';
@@ -16,9 +17,11 @@ export class ColosseumAPI {
     
     this.client = axios.create({
       baseURL: this.baseURL,
+      timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
-        ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` })
+        ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` }),
+        ...(this.agentId && { 'X-Agent-Id': this.agentId })
       }
     });
   }
@@ -37,13 +40,29 @@ export class ColosseumAPI {
   }
 
   /**
-   * Get all projects
+   * Get leaderboard (verified working)
    */
-async getProjects(params = {}) {
+  async getLeaderboard(params = {}) {
+    try {
+      const response = await this.client.get('/leaderboard', {
+        params: { limit: 100, ...params }
+      });
+      return response.data;
+    } catch (error) {
+      this.logger.error('Failed to get leaderboard:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all projects (verified working)
+   */
+  async getProjects(params = {}) {
     try {
       const response = await this.client.get('/projects', {
-        params: { ...params, limit: 100 },
+        params: { limit: 100, ...params }
       });
+      // API returns { projects: [...] }
       return response.data.projects || [];
     } catch (error) {
       this.logger.error('Failed to get projects:', error.message);
@@ -65,32 +84,21 @@ async getProjects(params = {}) {
   }
 
   /**
-   * Get leaderboard
-   */
-  async getLeaderboard() {
-    try {
-      const response = await this.client.get('/leaderboard');
-      return response.data;
-    } catch (error) {
-      this.logger.error('Failed to get leaderboard:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get forum posts
+   * Get forum posts (verified working)
    */
   async getForumPosts(params = {}) {
     try {
       const response = await this.client.get('/forum/posts', {
-        params: { limit: 100, ...params },
+        params: { limit: 100, ...params }
       });
+      // API returns { posts: [...] }
       return response.data.posts || [];
     } catch (error) {
       this.logger.error('Failed to get forum posts:', error.message);
       throw error;
     }
   }
+
   /**
    * Get single forum post
    */
@@ -181,7 +189,7 @@ async getProjects(params = {}) {
   }
 
   /**
-   * Get my project
+   * Get my project (verified working with auth)
    */
   async getMyProject() {
     try {

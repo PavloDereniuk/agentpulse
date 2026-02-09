@@ -69,18 +69,33 @@ if (process.env.AUTO_POST_ENABLED === "true") {
  * Health check with agent and Solana status
  */
 app.get("/health", async (req, res) => {
-  const solanaStats = solana.getStats();
+  try {
+    // Simple health check without complex dependencies
+    let solanaStatus = null;
+    try {
+      solanaStatus = await solana.getNetworkStatus();
+    } catch (solanaError) {
+      logger.warn('Solana unavailable:', solanaError?.message || 'Unknown error');
+      solanaStatus = { available: false };
+    }
 
-  res.json({
-    status: "ok",
-    agent: agent ? agent.getStats() : null,
-    solana: {
-      network: solanaStats.network,
-      walletConfigured: solanaStats.walletConfigured,
-      onChainLogs: solanaStats.totalMemoLogs,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    res.json({
+      status: 'ok',
+      agent: agent ? agent.getStats() : null,  // ← ДОДАЙ ЦЕ!
+      database: db.pool ? 'connected' : 'disconnected',
+      solana: solanaStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error("Health check error:", error?.message || error);
+    
+    res.json({
+      status: 'degraded',
+      agent: agent ? agent.getStats() : null,  // ← І ТУТ!
+      error: error?.message || 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 /**
@@ -105,10 +120,26 @@ app.get("/api/stats", (req, res) => {
  */
 app.get("/api/solana/status", async (req, res) => {
   try {
-    const [networkStatus, walletBalance] = await Promise.all([
-      solana.getNetworkStatus(),
-      solana.canWrite() ? solana.getAgentWalletBalance() : null,
-    ]);
+    let networkStatus = null;
+    let walletBalance = null;
+    
+    // Try to get network status with timeout
+    try {
+      networkStatus = await solana.getNetworkStatus();
+    } catch (err) {
+      logger.warn('Solana network unavailable:', err.message);
+      networkStatus = { available: false, error: 'Network unavailable' };
+    }
+    
+    // Try to get wallet balance
+    if (solana.canWrite()) {
+      try {
+        walletBalance = await solana.getAgentWalletBalance();
+      } catch (err) {
+        logger.warn('Wallet balance unavailable:', err.message);
+        walletBalance = null;
+      }
+    }
 
     res.json({
       network: networkStatus,
@@ -116,8 +147,14 @@ app.get("/api/solana/status", async (req, res) => {
       stats: solana.getStats(),
     });
   } catch (error) {
-    logger.error("Error getting Solana status:", error);
-    res.status(500).json({ error: error.message });
+    logger.error("Error getting Solana status:", error?.message || error);
+    
+    // Return fallback data instead of 500
+    res.json({
+      network: { available: false },
+      wallet: null,
+      stats: solana.getStats() || { network: 'devnet', walletConfigured: false },
+    });
   }
 });
 
@@ -236,6 +273,117 @@ app.get("/api/solana/on-chain-logs", async (req, res) => {
     });
   } catch (error) {
     logger.error("Error getting on-chain logs:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/proof
+ * Get cryptographic proofs from DATABASE only
+ */
+let proofsCache = null;
+let proofsCacheTime = 0;
+const PROOFS_CACHE_TTL = 300000; // 5 minutes
+
+app.get("/api/proof", async (req, res) => {
+  try {
+    // Check cache
+    const now = Date.now();
+    if (proofsCache && (now - proofsCacheTime) < PROOFS_CACHE_TTL) {
+      logger.info('Returning cached proofs');
+      return res.json(proofsCache);
+    }
+    
+    const limit = parseInt(req.query.limit) || 20;
+    
+    // Get from database
+    const result = await db.pool.query(`
+      SELECT *
+      FROM autonomy_log 
+      WHERE details IS NOT NULL
+      ORDER BY created_at DESC 
+      LIMIT $1
+    `, [limit]);
+
+    // Format as proofs
+// Format as proofs with better summaries
+const proofs = result.rows.map(log => {
+  const details = log.details || {};
+  const solanaTx = details.solanaTx || details.signature || null;
+  const action = details.action || log.action_type || 'ACTION';
+  
+  // Generate better summary based on action type
+  let summary = '';
+  switch(action) {
+    case 'DATA_COLLECTION':
+      const dc = details.details || {};
+      summary = `Collected ${dc.projectsCount || 0} projects, ${dc.postsCount || 0} posts`;
+      break;
+    case 'COMMENT_RESPONSE':
+      summary = `Responded to @${details.respondedTo} on post #${details.postId}`;
+      break;
+    case 'COMMENT_CHECK':
+      const cc = details.details || {};
+      summary = `Checked comments: ${cc.responded || 0}/${cc.processed || 0} responded`;
+      break;
+    case 'AGENT_SPOTLIGHT':
+      summary = details.title || `Agent Spotlight published`;
+      break;
+    case 'SELF_EVALUATION':
+      const se = details.metrics || {};
+      summary = `Self-check: ${se.votesGiven} votes, ${se.onChainLogs} logs, ${se.commentResponses} responses`;
+      break;
+     case 'SELF_IMPROVEMENT':
+    const si = details.improvements || details.changes || {};
+    if (si.strategyVersion) {
+      summary = `Strategy upgraded to v${si.strategyVersion}`;
+    } else {
+      summary = `Self-improvement cycle completed`;
+    }
+      break;
+    case 'POST_DECISION':
+      summary = `Post decision: ${details.decision} (quality: ${details.qualityScore}/10)`;
+      break;
+    case 'VOTING_CYCLE':
+      const vc = details.details || {};
+      summary = `Voting cycle: evaluated ${vc.evaluated || 0}, voted ${vc.voted || 0}`;
+      break;
+    default:
+      summary = `${action} completed successfully`;
+  }
+  
+  return {
+    signature: solanaTx,
+    timestamp: log.created_at,
+    type: action,
+    summary: summary,
+    hash: details.hash || details.actionHash || (solanaTx ? solanaTx.slice(0, 16) : null),
+    explorerUrl: solanaTx 
+      ? `https://solscan.io/tx/${solanaTx}?cluster=${solana.network}`
+      : null,
+    verified: !!solanaTx,
+    slot: details.slot || null,
+    metadata: details,
+  };
+});
+
+    const response = {
+      proofs,
+      total: proofs.length,
+      walletAddress: solana.walletPublicKey,
+      network: solana.network,
+      explorerBase: `https://solscan.io/account/${solana.walletPublicKey}?cluster=${solana.network}`,
+      timestamp: new Date().toISOString(),
+      cached: false,
+    };
+    
+    // Update cache
+    proofsCache = { ...response, cached: true };
+    proofsCacheTime = now;
+    
+    res.json(response);
+  } catch (error) {
+    logger.error("Error getting proofs:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -422,6 +570,7 @@ app.get("/api/comment-responses", async (req, res) => {
 // DATA ENDPOINTS
 // ============================================
 
+
 /**
  * GET /api/autonomy-log
  * Get autonomy log entries
@@ -542,6 +691,257 @@ app.post("/api/trigger-self-improve", async (req, res) => {
       stats: agent.getStats(),
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// AGENT API ENDPOINTS (for other AI agents)
+// ============================================
+
+/**
+ * GET /skill.json
+ * OpenClaw skill file for agent integration
+ */
+app.get("/skill.json", (req, res) => {
+  const skillData = {
+    "name": "AgentPulse Analytics API",
+    "description": "The First Autonomous Analytics Agent for AI Agent Communities. Provides real-time insights, project rankings, trends, and ecosystem health data for the Colosseum AI Agent Hackathon.",
+    "version": "1.0.0",
+    "agent": {
+      "name": "AgentPulse",
+      "id": "503",
+      "wallet": "5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2",
+      "twitter": "@PDereniuk"
+    },
+    "api": {
+      "base_url": "https://agentpulse-production-8e01.up.railway.app",
+      "documentation": "https://agentpulse.vercel.app",
+      "rate_limit": "100 requests per minute",
+      "authentication": "None (public API)"
+    },
+    "endpoints": [
+      {
+        "path": "/api/leaderboard",
+        "method": "GET",
+        "description": "Project rankings with AgentPulse Score"
+      },
+      {
+        "path": "/api/leaderboard/trends",
+        "method": "GET",
+        "description": "Rising stars and trending projects"
+      },
+      {
+        "path": "/api/agent-insights",
+        "method": "POST",
+        "description": "AI-generated project analysis",
+        "body": { "projectId": "number", "focusArea": "string (optional)" }
+      },
+      {
+        "path": "/api/ecosystem-stats",
+        "method": "GET",
+        "description": "Overall hackathon statistics"
+      },
+      {
+        "path": "/api/forum-activity",
+        "method": "GET",
+        "description": "Recent forum activity"
+      },
+      {
+        "path": "/api/proof",
+        "method": "GET",
+        "description": "On-chain autonomy proofs"
+      }
+    ]
+  };
+  res.json(skillData);
+});
+
+/**
+ * POST /api/agent-insights
+ * Get AI-generated insights about a specific project
+ */
+app.post("/api/agent-insights", async (req, res) => {
+  try {
+    const { projectId, focusArea = 'overall' } = req.body;
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    // Get project data from Colosseum API
+    const api = new (await import('./services/colosseumAPI.js')).ColosseumAPI();
+    const projects = await api.getProjects({ limit: 500 });
+    const project = projects.find(p => p.id === parseInt(projectId));
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Generate insights using InsightGenerator
+    const insightGen = new (await import('./services/insightGenerator.js')).InsightGenerator();
+    const prompt = `Analyze this AI agent project from the Colosseum Hackathon:
+
+Project: ${project.name}
+Description: ${project.description || 'No description'}
+Votes: ${project.voteCount || 0}
+Has Demo: ${project.presentationLink ? 'Yes' : 'No'}
+Has GitHub: ${project.repoLink ? 'Yes' : 'No'}
+Focus: ${focusArea}
+
+Provide a ${focusArea} analysis including:
+1. Quality score (1-10)
+2. Key strengths (3-5 points)
+3. Potential concerns (2-3 points)
+4. Brief overall assessment (2-3 sentences)
+
+Format as JSON: {score, strengths: [], concerns: [], analysis}`;
+
+    const insight = await insightGen.generateInsight(prompt);
+
+    // Try to parse as JSON, fallback to text
+    let parsedInsight;
+    try {
+      parsedInsight = JSON.parse(insight.content);
+    } catch (e) {
+      parsedInsight = {
+        score: 7,
+        analysis: insight.content,
+        strengths: ['Project exists'],
+        concerns: ['Analysis format issue']
+      };
+    }
+
+    res.json({
+      projectId: project.id,
+      projectName: project.name,
+      ...parsedInsight,
+      generatedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Agent insights error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/ecosystem-stats
+ * Overall hackathon ecosystem statistics
+ */
+app.get("/api/ecosystem-stats", async (req, res) => {
+  try {
+    const api = new (await import('./services/colosseumAPI.js')).ColosseumAPI();
+    const projects = await api.getProjects({ limit: 500 });
+    const forumPosts = await api.getForumPosts({ limit: 200 });
+
+    const stats = {
+      totalProjects: projects.length,
+      totalVotes: projects.reduce((sum, p) => sum + (p.voteCount || 0), 0),
+      avgVotesPerProject: projects.length > 0
+        ? (projects.reduce((sum, p) => sum + (p.voteCount || 0), 0) / projects.length).toFixed(2)
+        : 0,
+      projectsWithDemo: projects.filter(p => p.presentationLink).length,
+      projectsWithRepo: projects.filter(p => p.repoLink).length,
+      projectsWithDescription: projects.filter(p => p.description && p.description.length > 100).length,
+
+      // Calculate category distribution (based on keywords in descriptions)
+      topCategories: (() => {
+        const categories = {
+          'Trading/DeFi': 0,
+          'Analytics/Data': 0,
+          'Infrastructure': 0,
+          'Gaming': 0,
+          'Social': 0,
+          'Security': 0,
+          'AI/ML': 0,
+          'Other': 0
+        };
+
+        projects.forEach(p => {
+          const desc = (p.description || '').toLowerCase();
+          if (/trading|defi|swap|liquidity|yield|perp/.test(desc)) categories['Trading/DeFi']++;
+          else if (/analytics|dashboard|data|metrics|tracking/.test(desc)) categories['Analytics/Data']++;
+          else if (/infrastructure|sdk|api|framework|protocol/.test(desc)) categories['Infrastructure']++;
+          else if (/game|gaming|minecraft|nft/.test(desc)) categories['Gaming']++;
+          else if (/social|community|forum|chat/.test(desc)) categories['Social']++;
+          else if (/security|audit|safety|verify/.test(desc)) categories['Security']++;
+          else if (/ai|ml|llm|gpt|claude|model/.test(desc)) categories['AI/ML']++;
+          else categories['Other']++;
+        });
+
+        return Object.entries(categories)
+          .map(([category, count]) => ({ category, count }))
+          .filter(c => c.count > 0)
+          .sort((a, b) => b.count - a.count);
+      })(),
+
+      // Forum stats
+      totalForumPosts: forumPosts.length,
+      avgCommentsPerPost: forumPosts.length > 0
+        ? (forumPosts.reduce((sum, p) => sum + (p.commentCount || 0), 0) / forumPosts.length).toFixed(2)
+        : 0,
+
+      // Activity score (1-100 based on multiple factors)
+      activityScore: Math.min(100, Math.round(
+        (projects.length / 5) + // 20 pts per 100 projects
+        (stats.avgVotesPerProject * 2) + // votes
+        (forumPosts.length / 2) + // forum activity
+        ((projects.filter(p => p.presentationLink).length / projects.length) * 30) + // demo %
+        ((projects.filter(p => p.repoLink).length / projects.length) * 30) // repo %
+      )),
+
+      timestamp: new Date().toISOString()
+    };
+
+    res.json(stats);
+
+  } catch (error) {
+    logger.error('Ecosystem stats error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/forum-activity
+ * Recent forum posts and engagement metrics
+ */
+app.get("/api/forum-activity", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+    const api = new (await import('./services/colosseumAPI.js')).ColosseumAPI();
+    const posts = await api.getForumPosts({ limit, sort: 'new' });
+
+    const activity = {
+      posts: posts.map(p => ({
+        id: p.id,
+        title: p.title,
+        agentName: p.agentName,
+        createdAt: p.createdAt,
+        commentCount: p.commentCount || 0,
+        voteCount: p.voteCount || 0,
+        engagement: (p.commentCount || 0) + (p.voteCount || 0)
+      })),
+      totalPosts: posts.length,
+      avgEngagement: posts.length > 0
+        ? ((posts.reduce((sum, p) => sum + (p.commentCount || 0) + (p.voteCount || 0), 0)) / posts.length).toFixed(2)
+        : 0,
+      mostEngaged: posts
+        .map(p => ({
+          title: p.title,
+          agentName: p.agentName,
+          engagement: (p.commentCount || 0) + (p.voteCount || 0)
+        }))
+        .sort((a, b) => b.engagement - a.engagement)
+        .slice(0, 5),
+      timestamp: new Date().toISOString()
+    };
+
+    res.json(activity);
+
+  } catch (error) {
+    logger.error('Forum activity error:', error);
     res.status(500).json({ error: error.message });
   }
 });

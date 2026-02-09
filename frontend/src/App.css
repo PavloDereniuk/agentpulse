@@ -132,6 +132,63 @@ body {
   color: var(--accent-purple);
 }
 
+/* Navigation Tabs */
+
+.nav-tab {
+  
+  padding: 12px 24px;
+  justify-content: left;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.nav-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.nav-tab.active {
+  background: var(--accent-purple);
+  border-color: var(--accent-purple);
+  color: white;
+}
+
+.nav-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40%;
+  height: 2px;
+  background: var(--accent-purple);
+}
+
+.nav-tabs-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+  max-width: 1400px; /* ← таке саме як header-content */
+  margin: 0 auto; /* ← центрує wrapper */
+  padding: 0 32px; /* ← такий самий padding як header */
+}
+
 /* Main Content */
 .app-main {
   flex: 1;
