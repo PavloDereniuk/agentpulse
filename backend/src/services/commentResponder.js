@@ -19,12 +19,15 @@ import Anthropic from '@anthropic-ai/sdk';
 import { ColosseumAPI } from './colosseumAPI.js';
 import { DatabaseService } from './database.js';
 import { Logger } from '../utils/logger.js';
+import { ReasoningService } from './reasoningService.js';
+import { ACTION_TYPES } from './solanaService.js';
 
 export class CommentResponder {
   constructor() {
     this.api = new ColosseumAPI();
     this.db = new DatabaseService();
     this.logger = new Logger('CommentResponder');
+    this.reasoningService = new ReasoningService();
     
     // Initialize Claude
     this.anthropic = new Anthropic({
@@ -303,28 +306,92 @@ Response:`;
   }
 
   /**
-   * Post the response to the forum
-   */
-  async postResponse(postId, originalComment, responseText) {
-    // Add mention of the commenter
-    const fullResponse = `@${originalComment.agentName} ${responseText}`;
+ * Post the response to the forum with reasoning
+ */
+async postResponse(postId, originalComment, responseText) {
+  // Add mention of the commenter
+  const fullResponse = `@${originalComment.agentName} ${responseText}`;
 
-    // Post comment
-    const result = await this.api.createComment(postId, fullResponse);
+  // Generate reasoning for this response
+  const reasoning = this.reasoningService.generateCommentReasoning(
+    originalComment, 
+    {
+      content: responseText,
+      sentiment: this.analyzeSentiment(originalComment.content),
+      strategy: 'helpful_and_engaging',
+      tone: 'professional_yet_friendly',
+      keyPoints: ['Provide value', 'Build community'],
+      hasQuestion: responseText.includes('?'),
+      urgency: 'normal',
+      confidence: 0.85,
+      expectedImpact: 'Positive community interaction',
+    }
+  );
 
-    // Mark as processed in database
-    await this.markCommentProcessed(postId, originalComment.id, 'responded');
+  this.logger.info(`📝 Generated reasoning for comment response (confidence: ${(reasoning.confidence * 100).toFixed(1)}%)`);
 
-    // Log autonomous action
-    await this.logAction({
-      action: 'COMMENT_RESPONSE',
-      postId,
-      originalCommentId: originalComment.id,
-      respondedTo: originalComment.agentName,
-    });
+  // Post comment
+  const result = await this.api.createComment(postId, fullResponse);
 
-    return result;
+  // Mark as processed in database
+  await this.markCommentProcessed(postId, originalComment.id, 'responded');
+
+  // Log on-chain with reasoning
+  if (this.solana.canWrite()) {
+    try {
+      const solanaTx = await this.solana.logActionOnChain({
+        type: ACTION_TYPES.COMMENT_RESPONSE,
+        summary: `Responded to comment from ${originalComment.agentName}`,
+        reasoning: reasoning.reasoning,
+        confidence: reasoning.confidence,
+        factors: reasoning.factors,
+        metadata: {
+          postId,
+          commentId: originalComment.id,
+          author: originalComment.agentName,
+          responseLength: responseText.length,
+        }
+      });
+
+      this.logger.info(`📝 Response logged on-chain: ${solanaTx.signature.slice(0, 16)}...`);
+      this.logger.info(`   Explorer: ${solanaTx.explorerUrl}`);
+    } catch (solanaError) {
+      this.logger.warn('Failed to log response on-chain:', solanaError.message);
+    }
   }
+
+  // Log autonomous action (old format for compatibility)
+  await this.logAction({
+    action: 'COMMENT_RESPONSE',
+    postId,
+    originalCommentId: originalComment.id,
+    respondedTo: originalComment.agentName,
+  });
+
+  return result;
+}
+
+/**
+ * Simple sentiment analysis helper
+ */
+analyzeSentiment(text) {
+  const lowerText = text.toLowerCase();
+  
+  // Check for positive words
+  const positiveWords = ['great', 'awesome', 'excellent', 'love', 'thanks', 'good', 'nice'];
+  const negativeWords = ['bad', 'terrible', 'hate', 'problem', 'issue', 'wrong', 'broken'];
+  
+  const hasPositive = positiveWords.some(word => lowerText.includes(word));
+  const hasNegative = negativeWords.some(word => lowerText.includes(word));
+  
+  if (hasPositive && !hasNegative) return 'positive';
+  if (hasNegative && !hasPositive) return 'negative';
+  if (lowerText.includes('?')) return 'curious';
+  
+  return 'neutral';
+}
+
+
 
   /**
    * Check if we're within rate limits
