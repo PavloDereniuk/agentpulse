@@ -33,10 +33,11 @@ export class VotingService {
     
     // Config
     this.config = {
-      maxVotesPerDay: 15, // Increased from 10
-      minScoreToVote: 6, // Lowered from 7 (more realistic for hackathon)
-      skipOwnProject: true,
-      ownProjectId: 244, // AgentPulse project ID
+      maxVotesPerDay: 25, 
+     minScoreToVote: 5.5, 
+    excellenceThreshold: 7.5, 
+    skipOwnProject: true,
+    ownProjectId: 244, 
     };
     
     // Stats
@@ -111,14 +112,19 @@ export class VotingService {
         
         this.logger.info(
           `Project ${project.id} (${project.name}): ` +
-          `Obj=${objectiveScore}/10, Claude=${claudeEval.score}/10, ` +
+          `Obj=${objectiveScore}/10, Claude=${claudeEval.score}/10, ` 
           `Final=${evaluation.finalScore}/10`
         );
+
+        // Priority voting for excellent projects
+        if (evaluation.finalScore >= this.config.excellenceThreshold) {
+         this.logger.info(`⭐ EXCELLENT PROJECT: ${project.name} (${evaluation.finalScore}/10)`);
+        }
 
         // Store evaluation
         await this.storeEvaluation(project.id, evaluation);
 
-        // Vote if quality is high enough
+        // Vote if quality meets threshold (5.5+) or excellence threshold (7.5+)
         if (evaluation.shouldVote && finalScore >= this.config.minScoreToVote) {
           const success = await this.voteForProject(project, evaluation);
           if (success) {
