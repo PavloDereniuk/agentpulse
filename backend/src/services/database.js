@@ -43,12 +43,60 @@ export class DatabaseService {
 
       // Create tables if they don't exist
       await this.createTables();
+      await this.initializeReasoningTable();
     } catch (error) {
       this.logger.error("❌ Database connection failed:", error.message);
       this.logger.warn("⚠️  Database features will be disabled");
       this.pool = null;
     }
   }
+
+  /**
+ * Initialize action_reasoning table
+ */
+async initializeReasoningTable() {
+  try {
+    // Create table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS action_reasoning (
+        id SERIAL PRIMARY KEY,
+        action_hash VARCHAR(64) UNIQUE NOT NULL,
+        action_type VARCHAR(50) NOT NULL,
+        reasoning TEXT NOT NULL,
+        confidence FLOAT CHECK (confidence >= 0 AND confidence <= 1),
+        factors JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Create indexes - wrap each in try-catch to handle "already exists" errors
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_action_hash ON action_reasoning(action_hash)',
+      'CREATE INDEX IF NOT EXISTS idx_action_type ON action_reasoning(action_type)',
+      'CREATE INDEX IF NOT EXISTS idx_created_at ON action_reasoning(created_at DESC)',
+    ];
+
+    for (const indexQuery of indexes) {
+      try {
+        await this.pool.query(indexQuery);
+      } catch (indexError) {
+        // Ignore "already exists" errors (race condition when multiple instances start)
+        if (!indexError.message.includes('already exists') && 
+            !indexError.message.includes('duplicate key')) {
+          throw indexError;
+        }
+      }
+    }
+
+    this.logger.info('✅ action_reasoning table initialized');
+  } catch (error) {
+    // Only log real errors, not "already exists"
+    if (!error.message.includes('already exists') && 
+        !error.message.includes('duplicate key')) {
+      this.logger.error('Failed to initialize reasoning table:', error.message);
+    }
+  }
+}
 
   /**
    * Create necessary tables

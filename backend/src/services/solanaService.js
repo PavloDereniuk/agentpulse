@@ -21,13 +21,40 @@ import {
 import bs58 from 'bs58';
 import crypto from 'crypto';
 import { Logger } from '../utils/logger.js';
+import { DatabaseService } from './database.js';
 
+// Memo Program ID (official Solana Memo Program)
 // Memo Program ID (official Solana Memo Program)
 const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 
+// Action types for on-chain logging
+export const ACTION_TYPES = {
+  // Data collection
+  DATA_COLLECTION: 'DATA_COLLECTION',
+  LEADERBOARD_SNAPSHOT: 'LEADERBOARD_SNAPSHOT',
+  
+  // Content generation
+  DAILY_DIGEST: 'DAILY_DIGEST',
+  AGENT_SPOTLIGHT: 'AGENT_SPOTLIGHT',
+  INSIGHT_GENERATION: 'INSIGHT_GENERATION',
+  
+  // Community engagement
+  FORUM_POST: 'FORUM_POST',
+  COMMENT_RESPONSE: 'COMMENT_RESPONSE',
+  
+  // Evaluation & voting
+  PROJECT_EVALUATION: 'PROJECT_EVALUATION',
+  VOTE_CAST: 'VOTE_CAST',
+  
+  // Self-improvement
+  STRATEGY_ADJUSTMENT: 'STRATEGY_ADJUSTMENT',
+  LEARNING_UPDATE: 'LEARNING_UPDATE',
+};
+
 export class SolanaService {
   constructor() {
-    this.logger = new Logger('SolanaService');
+  this.logger = new Logger('SolanaService');
+  this.db = new DatabaseService();
     
     // Connection to Solana
     this.rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
@@ -225,84 +252,105 @@ export class SolanaService {
    * @param {Object} action.metadata - Additional metadata
    * @returns {Promise<{signature: string, explorerUrl: string, hash: string}>}
    */
-  async logActionOnChain(action) {
-    if (!this.canWrite()) {
-      this.logger.warn('⚠️ Cannot log on-chain: no wallet configured');
-      return null;
-    }
-
-    try {
-      const timestamp = Date.now();
-      const actionData = {
-        type: action.type,
-        summary: action.summary,
-        timestamp,
-        metadata: action.metadata,
-      };
-
-      // Create SHA256 hash for verification
-      const actionHash = this.createActionHash(actionData);
-
-      // Create memo content (keep it concise for on-chain storage)
-      const memoContent = JSON.stringify({
-        agent: 'AgentPulse#503',
-        type: action.type,
-        summary: action.summary?.slice(0, 200), // Limit length
-        hash: actionHash.slice(0, 16), // First 16 chars of hash
-        ts: timestamp,
-        ...action.metadata,
-      });
-
-      // Ensure memo isn't too long (max ~1000 bytes recommended)
-      if (memoContent.length > 900) {
-        this.logger.warn('Memo content truncated to fit on-chain limits');
-      }
-
-      // Create memo instruction
-      const memoInstruction = new TransactionInstruction({
-        keys: [],
-        programId: MEMO_PROGRAM_ID,
-        data: Buffer.from(memoContent.slice(0, 900)),
-      });
-
-      // Build transaction
-      const transaction = new Transaction().add(memoInstruction);
-      
-      // Get recent blockhash
-      const { blockhash } = await this.connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = this.wallet.publicKey;
-
-      // Sign and send
-      const signature = await sendAndConfirmTransaction(
-        this.connection,
-        transaction,
-        [this.wallet],
-        { commitment: 'confirmed' }
-      );
-
-      this.stats.totalWrites++;
-      this.stats.totalMemoLogs++;
-      this.stats.lastTransaction = signature;
-
-      const explorerUrl = this.getExplorerUrl(signature);
-      
-      this.logger.info(`✅ Action logged on-chain: ${signature.slice(0, 16)}...`);
-      this.logger.info(`   Hash: ${actionHash.slice(0, 16)}...`);
-      this.logger.info(`   Explorer: ${explorerUrl}`);
-
-      return {
-        signature,
-        explorerUrl,
-        memoContent,
-        hash: actionHash,
-        timestamp: new Date(timestamp).toISOString(),
-      };
-    } catch (error) {
-      this.logger.error('❌ Failed to log action on-chain:', error.message);
-      throw error;
-    }
+ async logActionOnChain(action) {
+  if (!this.canWrite()) {
+    this.logger.warn('⚠️ Cannot log on-chain: no wallet configured');
+    return null;
   }
+
+  try {
+    const timestamp = Date.now();
+    const actionData = {
+      type: action.type,
+      summary: action.summary,
+      reasoning: action.reasoning || 'No reasoning provided',
+      confidence: action.confidence || 0.0,
+      factors: action.factors || {},
+      timestamp,
+      metadata: action.metadata,
+    };
+
+    // Create SHA256 hash for verification
+    const actionHash = this.createActionHash(actionData);
+
+    // Store FULL reasoning in database (too large for blockchain)
+    if (action.reasoning) {
+      await this.storeReasoningInDB(actionHash, {
+        type: action.type,
+        reasoning: action.reasoning,
+        confidence: action.confidence,
+        factors: action.factors,
+        timestamp: new Date(timestamp).toISOString(),
+      });
+    }
+
+    // Create compact memo for on-chain (keep under 900 bytes)
+    const memoContent = JSON.stringify({
+      agent: 'AgentPulse#503',
+      type: action.type,
+      summary: action.summary?.slice(0, 150), 
+      hash: actionHash.slice(0, 16),
+      confidence: action.confidence,
+      ts: timestamp,
+      // Include first line of reasoning only
+      reason: action.reasoning?.split('\n')[0]?.slice(0, 100),
+    });
+
+    // Ensure memo isn't too long (max ~1000 bytes recommended)
+    if (memoContent.length > 900) {
+      this.logger.warn('Memo content truncated to fit on-chain limits');
+    }
+
+    // Create memo instruction
+    const memoInstruction = new TransactionInstruction({
+      keys: [],
+      programId: MEMO_PROGRAM_ID,
+      data: Buffer.from(memoContent.slice(0, 900)),
+    });
+
+    // Build transaction
+    const transaction = new Transaction().add(memoInstruction);
+    
+    // Get recent blockhash
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    // Sign and send
+    const signature = await sendAndConfirmTransaction(
+      this.connection,
+      transaction,
+      [this.wallet],
+      { commitment: 'confirmed' }
+    );
+
+    this.stats.totalWrites++;
+    this.stats.totalMemoLogs++;
+    this.stats.lastTransaction = signature;
+
+    const explorerUrl = this.getExplorerUrl(signature);
+    
+    this.logger.info(`✅ Action logged on-chain: ${signature.slice(0, 16)}...`);
+    this.logger.info(`   Type: ${action.type}`);
+    this.logger.info(`   Hash: ${actionHash.slice(0, 16)}...`);
+    if (action.confidence) {
+      this.logger.info(`   Confidence: ${(action.confidence * 100).toFixed(1)}%`);
+    }
+
+    return {
+      signature,
+      explorerUrl,
+      memoContent,
+      hash: actionHash,
+      reasoning: action.reasoning,
+      confidence: action.confidence,
+      timestamp: new Date(timestamp).toISOString(),
+    };
+  } catch (error) {
+    this.logger.error('❌ Failed to log action on-chain:', error.message);
+    throw error;
+  }
+}
 
   /**
    * Get Solana explorer URL for a transaction
@@ -492,6 +540,59 @@ export class SolanaService {
     } catch (error) {
       this.logger.error('Signature verification failed:', error.message);
       return false;
+    }
+  }
+
+  /**
+   * Store full reasoning in database (too large for blockchain)
+   */
+  async storeReasoningInDB(actionHash, reasoningData) {
+    try {
+      await this.db.pool.query(`
+        INSERT INTO action_reasoning 
+        (action_hash, action_type, reasoning, confidence, factors)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (action_hash) DO UPDATE SET
+          reasoning = EXCLUDED.reasoning,
+          confidence = EXCLUDED.confidence,
+          factors = EXCLUDED.factors,
+          created_at = NOW()
+      `, [
+        actionHash,
+        reasoningData.type,
+        reasoningData.reasoning,
+        reasoningData.confidence,
+        JSON.stringify(reasoningData.factors || {}),
+      ]);
+
+      this.logger.info(`📝 Reasoning stored for ${actionHash.slice(0, 8)}`);
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to store reasoning:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Get reasoning from database by action hash
+   */
+  async getReasoningFromDB(actionHash) {
+    try {
+      const result = await this.db.pool.query(
+        'SELECT * FROM action_reasoning WHERE action_hash = $1',
+        [actionHash]
+      );
+      
+      if (result.rows.length > 0) {
+        return {
+          ...result.rows[0],
+          factors: result.rows[0].factors || {},
+        };
+      }
+      return null;
+    } catch (error) {
+      this.logger.error('Failed to get reasoning:', error.message);
+      return null;
     }
   }
 }  // <-- ЦЕ ЗАКРИВАЄ КЛАС SolanaService
