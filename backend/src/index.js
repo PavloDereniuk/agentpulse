@@ -13,6 +13,7 @@ import dotenv from "dotenv";
 import AutonomousAgent from "./agents/autonomousAgent.js";
 import { SolanaService } from "./services/solanaService.js";
 import { Logger } from "./utils/logger.js";
+import mockReputation from './services/mockReputationService.js';
 import { DatabaseService } from "./services/database.js";
 
 // Load environment variables
@@ -1043,6 +1044,68 @@ app.post("/api/trigger-self-improve", async (req, res) => {
       stats: agent.getStats(),
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ============================================================================
+// REPUTATION API ENDPOINTS
+// ============================================================================
+
+// Get agent reputation
+app.get('/api/reputation/:agentId', (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const reputation = mockReputation.getReputation(parseInt(agentId));
+    
+    if (!reputation) {
+      return res.status(404).json({ error: 'Reputation not found' });
+    }
+    
+    res.json(reputation);
+  } catch (error) {
+    console.error('Get reputation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get protocol activities
+app.get('/api/reputation/:agentId/protocols', (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const activities = mockReputation.getProtocolActivities(parseInt(agentId));
+    res.json(activities);
+  } catch (error) {
+    console.error('Get protocol activities error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get protocol ecosystem stats
+app.get('/api/protocol-stats', (req, res) => {
+  try {
+    const stats = mockReputation.getProtocolStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Get protocol stats error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get score breakdown
+app.get('/api/reputation/:agentId/breakdown', (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const breakdown = mockReputation.getScoreBreakdown(parseInt(agentId));
+    
+    if (!breakdown) {
+      return res.status(404).json({ error: 'Reputation not found' });
+    }
+    
+    res.json(breakdown);
+  } catch (error) {
+    console.error('Get score breakdown error:', error);
     res.status(500).json({ error: error.message });
   }
 });

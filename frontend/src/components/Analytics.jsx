@@ -23,11 +23,16 @@ function Analytics() {
   const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reputationData, setReputationData] = useState(null);
 
   // Fetch all analytics data
   useEffect(() => {
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 30000); // Refresh every 30s
+    fetchReputationData();
+    const interval = setInterval(() => {
+      fetchAnalytics();
+      fetchReputationData();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -57,6 +62,24 @@ function Analytics() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReputationData = async () => {
+    try {
+      const [reputationRes, protocolsRes, breakdownRes] = await Promise.all([
+        fetch(`${API_BASE}/api/reputation/503`),
+        fetch(`${API_BASE}/api/reputation/503/protocols`),
+        fetch(`${API_BASE}/api/reputation/503/breakdown`)
+      ]);
+
+      const reputation = await reputationRes.json();
+      const protocols = await protocolsRes.json();
+      const breakdown = await breakdownRes.json();
+
+      setReputationData({ reputation, protocols, breakdown });
+    } catch (error) {
+      console.error('Error fetching reputation:', error);
     }
   };
 
@@ -104,6 +127,8 @@ function Analytics() {
     hour: `${item.hour}:00`,
     responses: item.count
   })) || [];
+
+  
 
   return (
     <div className="analytics-container">
@@ -344,7 +369,114 @@ function Analytics() {
           </div>
         </section>
       </div>
+      {reputationData && (
+        <div className="reputation-section">
+          <h2>🏆 Agent Reputation System</h2>
+          
+          <div className="reputation-overview">
+            <div className="reputation-score-card">
+              <div className="reputation-score-big">
+                {reputationData.reputation.overallReputation}
+                <span>/10</span>
+              </div>
+              <div className="reputation-label">Overall Reputation</div>
+              <div className="reputation-subtitle">
+                Protocol-Native Scoring System
+              </div>
+            </div>
+
+            <div className="score-breakdown">
+              <div className="breakdown-item">
+                <div className="breakdown-label">💎 Quality</div>
+                <div className="breakdown-score">
+                  {reputationData.reputation.qualityScore}/10
+                </div>
+                <div className="breakdown-weight">30% weight</div>
+              </div>
+              <div className="breakdown-item">
+                <div className="breakdown-label">💬 Engagement</div>
+                <div className="breakdown-score">
+                  {reputationData.reputation.engagementScore}/10
+                </div>
+                <div className="breakdown-weight">30% weight</div>
+              </div>
+              <div className="breakdown-item">
+                <div className="breakdown-label">🔗 Protocols</div>
+                <div className="breakdown-score">
+                  {reputationData.breakdown.protocolExpertise.score}/10
+                </div>
+                <div className="breakdown-weight">40% weight</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="protocol-usage">
+            <h3>Protocol Ecosystem Integration</h3>
+            <div className="protocol-grid">
+              {reputationData.protocols.map((protocol, idx) => (
+                <div key={idx} className="protocol-card">
+                  <div className="protocol-header">
+                    <span className="protocol-name">{protocol.protocol}</span>
+                    <span className="protocol-score">
+                      {reputationData.reputation[`${protocol.protocol.toLowerCase()}Score`]}/10
+                    </span>
+                  </div>
+                  <div className="protocol-stats">
+                    <div className="protocol-stat">
+                      <span className="stat-label">Transactions</span>
+                      <span className="stat-value">{protocol.count}</span>
+                    </div>
+                    {protocol.volume > 0 && (
+                      <div className="protocol-stat">
+                        <span className="stat-label">Volume</span>
+                        <span className="stat-value">${protocol.volume.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="protocol-description">{protocol.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="badges-section">
+            <h3>🏅 Achievement Badges</h3>
+            <div className="badges-grid">
+              {reputationData.reputation.badgesEarned.map((badge, idx) => (
+                <div key={idx} className="badge-card">
+                  <div className="badge-icon">🏅</div>
+                  <div className="badge-name">{badge.type}</div>
+                  <div className="badge-date">
+                    {new Date(badge.earnedAt).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="reputation-stats">
+            <div className="stat-item">
+              <div className="stat-value">{reputationData.reputation.totalProtocolsUsed}</div>
+              <div className="stat-label">Protocols Used</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{reputationData.reputation.totalTransactions}</div>
+              <div className="stat-label">Total Transactions</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{reputationData.reputation.badgesEarned.length}</div>
+              <div className="stat-label">Badges Earned</div>
+            </div>
+          </div>
+
+          <div className="implementation-note">
+            📝 <strong>Demo Mode:</strong> Showing mock data. Production uses Anchor smart contracts. 
+            Code: <code>/solana-program/agent-reputation/</code>
+          </div>
+        </div>
+      )}
     </div>
+    
   );
 }
 

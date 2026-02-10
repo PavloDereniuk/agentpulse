@@ -361,6 +361,302 @@
   margin: 0;
 }
 
+/* ============================================================================
+   REPUTATION SYSTEM STYLES
+   ============================================================================ */
+
+.reputation-section {
+  margin-top: 3rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.reputation-section h2 {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.reputation-section h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: #e0e7ff;
+}
+
+/* Overall Score Card */
+.reputation-overview {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.reputation-score-card {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  padding: 2rem;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+}
+
+.reputation-score-big {
+  font-size: 5rem;
+  font-weight: 800;
+  color: white;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.reputation-score-big span {
+  font-size: 2.5rem;
+  opacity: 0.8;
+}
+
+.reputation-label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 0.5rem;
+}
+
+.reputation-subtitle {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Score Breakdown */
+.score-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.breakdown-item {
+  background: rgba(99, 102, 241, 0.1);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  text-align: center;
+}
+
+.breakdown-label {
+  font-size: 1rem;
+  color: #c7d2fe;
+  margin-bottom: 0.8rem;
+}
+
+.breakdown-score {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #818cf8;
+  margin-bottom: 0.5rem;
+}
+
+.breakdown-weight {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+/* Protocol Usage */
+.protocol-usage {
+  margin-bottom: 3rem;
+}
+
+.protocol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.protocol-card {
+  background: rgba(30, 41, 59, 0.6);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  transition: all 0.3s ease;
+}
+
+.protocol-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+}
+
+.protocol-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.protocol-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #e0e7ff;
+}
+
+.protocol-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #818cf8;
+}
+
+.protocol-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.protocol-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #c7d2fe;
+}
+
+.protocol-description {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+/* Achievement Badges */
+.badges-section {
+  margin-bottom: 3rem;
+}
+
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.5rem;
+}
+
+.badge-card {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.badge-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(251, 191, 36, 0.3);
+}
+
+.badge-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.badge-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fde68a;
+  margin-bottom: 0.5rem;
+}
+
+.badge-date {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* Reputation Stats Summary */
+.reputation-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.reputation-stats .stat-item {
+  background: rgba(99, 102, 241, 0.1);
+  padding: 1.5rem;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.reputation-stats .stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #818cf8;
+  margin-bottom: 0.5rem;
+}
+
+.reputation-stats .stat-label {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Implementation Note */
+.implementation-note {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  color: #93c5fd;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.implementation-note code {
+  background: rgba(30, 41, 59, 0.8);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  color: #fbbf24;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .reputation-overview {
+    grid-template-columns: 1fr;
+  }
+  
+  .score-breakdown {
+    grid-template-columns: 1fr;
+  }
+  
+  .protocol-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .reputation-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .charts-grid {
