@@ -669,6 +669,358 @@ app.get("/api/leaderboard/history", async (req, res) => {
   }
 });
 
+// ============================================
+// ANALYTICS ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/analytics/overview
+ * Get overall analytics summary
+ */
+app.get("/api/analytics/overview", async (req, res) => {
+  try {
+    // Total actions
+    const totalResult = await db.pool.query(`
+      SELECT COUNT(*) as total FROM autonomy_log
+    `);
+    
+    // Actions by type
+    const typeResult = await db.pool.query(`
+      SELECT 
+        details->>'action' as action_type,
+        COUNT(*) as count
+      FROM autonomy_log
+      WHERE details->>'action' IS NOT NULL
+      GROUP BY details->>'action'
+      ORDER BY count DESC
+      LIMIT 5
+    `);
+    
+    // Success rate
+    const successResult = await db.pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE details->>'outcome' = 'SUCCESS') as successful,
+        COUNT(*) as total
+      FROM autonomy_log
+      WHERE details->>'outcome' IS NOT NULL
+    `);
+    
+    // Activity by hour (last 24h)
+    const hourlyResult = await db.pool.query(`
+      SELECT 
+        EXTRACT(HOUR FROM created_at) as hour,
+        COUNT(*) as count
+      FROM autonomy_log
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY hour
+      ORDER BY hour
+    `);
+    
+    // Daily growth (today vs yesterday)
+    const growthResult = await db.pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as today,
+        COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE - 1) as yesterday
+      FROM autonomy_log
+    `);
+    
+    const totalActions = parseInt(totalResult.rows[0]?.total) || 0;
+    const topActionType = typeResult.rows[0]?.action_type || 'N/A';
+    const successful = parseInt(successResult.rows[0]?.successful) || 0;
+    const totalTracked = parseInt(successResult.rows[0]?.total) || 1;
+    const successRate = ((successful / totalTracked) * 100).toFixed(1);
+    
+    const today = parseInt(growthResult.rows[0]?.today) || 0;
+    const yesterday = parseInt(growthResult.rows[0]?.yesterday) || 1;
+    const dailyGrowth = (((today - yesterday) / yesterday) * 100).toFixed(1);
+    
+    // Active hours (top 3 hours by activity)
+    const activeHours = hourlyResult.rows
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map(row => parseInt(row.hour));
+    
+    res.json({
+      totalActions,
+      successRate: parseFloat(successRate),
+      topActionType,
+      activeHours,
+      dailyGrowth: parseFloat(dailyGrowth),
+      actionDistribution: typeResult.rows.map(row => ({
+        type: row.action_type,
+        count: parseInt(row.count)
+      })),
+      uptime: agent ? Math.floor(agent.getStats().uptime) : 0
+    });
+  } catch (error) {
+    logger.error("Analytics overview error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/voting
+ * Get voting analytics
+ */
+app.get("/api/analytics/voting", async (req, res) => {
+  try {
+    // Total evaluations and average score
+    const statsResult = await db.pool.query(`
+      SELECT 
+        COUNT(*) as total_evaluations,
+        AVG(score) as avg_score,
+        MAX(score) as max_score,
+        MIN(score) as min_score
+      FROM project_evaluations
+    `);
+    
+    // Score distribution
+    const distributionResult = await db.pool.query(`
+      SELECT 
+        FLOOR(score) as score_bucket,
+        COUNT(*) as count
+      FROM project_evaluations
+      WHERE score IS NOT NULL
+      GROUP BY score_bucket
+      ORDER BY score_bucket
+    `);
+    
+    // Top projects by score
+    const topProjectsResult = await db.pool.query(`
+      SELECT 
+        project_id,
+        score,
+        completeness,
+        innovation,
+        technical_quality,
+        ecosystem_value,
+        engagement,
+        reasoning,
+        created_at
+      FROM project_evaluations
+      ORDER BY score DESC
+      LIMIT 10
+    `);
+    
+    // Recent voting activity (last 7 days)
+    const activityResult = await db.pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as votes,
+        AVG(score) as avg_score
+      FROM project_evaluations
+      WHERE created_at > NOW() - INTERVAL '7 days'
+      GROUP BY date
+      ORDER BY date
+    `);
+    
+    const stats = statsResult.rows[0];
+    const totalEvaluations = parseInt(stats?.total_evaluations) || 0;
+    
+    res.json({
+      projectsEvaluated: totalEvaluations,
+      votesGiven: totalEvaluations,
+      avgScore: parseFloat(stats?.avg_score || 0).toFixed(1),
+      maxScore: parseFloat(stats?.max_score || 0).toFixed(1),
+      minScore: parseFloat(stats?.min_score || 0).toFixed(1),
+      scoreDistribution: distributionResult.rows.reduce((acc, row) => {
+        acc[row.score_bucket] = parseInt(row.count);
+        return acc;
+      }, {}),
+      topProjects: topProjectsResult.rows.map(row => ({
+        id: row.project_id,
+        score: parseFloat(row.score).toFixed(1),
+        breakdown: {
+          completeness: row.completeness,
+          innovation: row.innovation,
+          technicalQuality: row.technical_quality,
+          ecosystemValue: row.ecosystem_value,
+          engagement: row.engagement
+        },
+        reasoning: row.reasoning,
+        votedAt: row.created_at
+      })),
+      recentActivity: activityResult.rows.map(row => ({
+        date: row.date,
+        votes: parseInt(row.votes),
+        avgScore: parseFloat(row.avg_score).toFixed(1)
+      }))
+    });
+  } catch (error) {
+    logger.error("Analytics voting error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/engagement
+ * Get comment and forum engagement analytics
+ */
+app.get("/api/analytics/engagement", async (req, res) => {
+  try {
+    // Comment responses stats
+    const commentStatsResult = await db.pool.query(`
+      SELECT 
+        COUNT(*) as total_responses,
+        COUNT(DISTINCT details->>'postId') as unique_posts
+      FROM autonomy_log
+      WHERE details->>'action' = 'COMMENT_RESPONSE'
+    `);
+    
+    // Comments by hour (last 7 days)
+    const hourlyResult = await db.pool.query(`
+      SELECT 
+        EXTRACT(HOUR FROM created_at) as hour,
+        COUNT(*) as count
+      FROM autonomy_log
+      WHERE details->>'action' = 'COMMENT_RESPONSE'
+        AND created_at > NOW() - INTERVAL '7 days'
+      GROUP BY hour
+      ORDER BY hour
+    `);
+    
+    // Daily engagement (last 7 days)
+    const dailyResult = await db.pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) FILTER (WHERE details->>'action' = 'COMMENT_RESPONSE') as responses,
+        COUNT(*) FILTER (WHERE details->>'action' = 'FORUM_POST') as posts,
+        COUNT(*) FILTER (WHERE details->>'action' = 'VOTE') as votes
+      FROM autonomy_log
+      WHERE created_at > NOW() - INTERVAL '7 days'
+      GROUP BY date
+      ORDER BY date
+    `);
+    
+    // Response time analysis (for comments with timestamps)
+    const responseTimeResult = await db.pool.query(`
+      SELECT 
+        AVG(EXTRACT(EPOCH FROM (created_at - (details->>'commentCreatedAt')::timestamp))/60) as avg_minutes
+      FROM autonomy_log
+      WHERE details->>'action' = 'COMMENT_RESPONSE'
+        AND details->>'commentCreatedAt' IS NOT NULL
+        AND created_at > NOW() - INTERVAL '7 days'
+    `);
+    
+    // Top engagement targets (most responded to users)
+    const topTargetsResult = await db.pool.query(`
+      SELECT 
+        details->>'respondedTo' as username,
+        COUNT(*) as responses
+      FROM autonomy_log
+      WHERE details->>'action' = 'COMMENT_RESPONSE'
+        AND details->>'respondedTo' IS NOT NULL
+      GROUP BY username
+      ORDER BY responses DESC
+      LIMIT 5
+    `);
+    
+    const commentStats = commentStatsResult.rows[0];
+    const avgResponseTime = parseFloat(responseTimeResult.rows[0]?.avg_minutes || 0);
+    
+    res.json({
+      totalResponses: parseInt(commentStats?.total_responses) || 0,
+      uniquePosts: parseInt(commentStats?.unique_posts) || 0,
+      avgResponseTime: avgResponseTime > 0 ? `${avgResponseTime.toFixed(1)} min` : 'N/A',
+      commentsByHour: hourlyResult.rows.map(row => ({
+        hour: parseInt(row.hour),
+        count: parseInt(row.count)
+      })),
+      dailyEngagement: dailyResult.rows.map(row => ({
+        date: row.date,
+        responses: parseInt(row.responses),
+        posts: parseInt(row.posts),
+        votes: parseInt(row.votes)
+      })),
+      topTargets: topTargetsResult.rows.map(row => ({
+        username: row.username,
+        responses: parseInt(row.responses)
+      }))
+    });
+  } catch (error) {
+    logger.error("Analytics engagement error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/analytics/timeline
+ * Get activity timeline data
+ */
+app.get("/api/analytics/timeline", async (req, res) => {
+  try {
+    const { period = '7d' } = req.query;
+    
+    // Determine interval based on period
+    let interval = '7 days';
+    let groupBy = 'DATE(created_at)';
+    if (period === '24h') {
+      interval = '24 hours';
+      groupBy = "DATE_TRUNC('hour', created_at)";
+    } else if (period === '30d') {
+      interval = '30 days';
+    }
+    
+    // Hourly activity (last 24h)
+    const hourlyResult = await db.pool.query(`
+      SELECT 
+        DATE_TRUNC('hour', created_at) as timestamp,
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE details->>'action' = 'DATA_COLLECTION') as data_collection,
+        COUNT(*) FILTER (WHERE details->>'action' = 'COMMENT_RESPONSE') as comment_responses,
+        COUNT(*) FILTER (WHERE details->>'action' = 'COMMENT_CHECK') as comment_checks,
+        COUNT(*) FILTER (WHERE details->>'action' = 'VOTING_CYCLE') as voting
+      FROM autonomy_log
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY timestamp
+      ORDER BY timestamp
+    `);
+    
+    // Daily activity (last 7 days)
+    const dailyResult = await db.pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE details->>'action' = 'DATA_COLLECTION') as data_collection,
+        COUNT(*) FILTER (WHERE details->>'action' = 'COMMENT_RESPONSE') as comment_responses,
+        COUNT(*) FILTER (WHERE details->>'action' = 'AGENT_SPOTLIGHT') as spotlights,
+        COUNT(*) FILTER (WHERE details->>'action' = 'DAILY_DIGEST') as digests
+      FROM autonomy_log
+      WHERE created_at > NOW() - INTERVAL '7 days'
+      GROUP BY date
+      ORDER BY date
+    `);
+    
+    res.json({
+      hourly: hourlyResult.rows.map(row => ({
+        timestamp: row.timestamp,
+        total: parseInt(row.total),
+        breakdown: {
+          dataCollection: parseInt(row.data_collection),
+          commentResponses: parseInt(row.comment_responses),
+          commentChecks: parseInt(row.comment_checks),
+          voting: parseInt(row.voting)
+        }
+      })),
+      daily: dailyResult.rows.map(row => ({
+        date: row.date,
+        total: parseInt(row.total),
+        breakdown: {
+          dataCollection: parseInt(row.data_collection),
+          commentResponses: parseInt(row.comment_responses),
+          spotlights: parseInt(row.spotlights),
+          digests: parseInt(row.digests)
+        }
+      }))
+    });
+  } catch (error) {
+    logger.error("Analytics timeline error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
 app.get("/api/evolution", async (req, res) => {
   if (!agent) return res.status(503).json({ error: "Agent not running" });
   try {

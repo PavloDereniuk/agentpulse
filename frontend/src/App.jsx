@@ -10,7 +10,8 @@ import React, { useState, useEffect } from 'react';
 import SolanaActivity from './components/SolanaActivity';
 import Leaderboard from './components/Leaderboard';
 import Evolution from './components/Evolution';
-import Proof from './components/Proof';  // ← ДОДАНО
+import Proof from './components/Proof';
+import Analytics from './components/Analytics';
 import './App.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://agentpulse-production-8e01.up.railway.app';
@@ -91,19 +92,25 @@ function App() {
         {/* Navigation Tabs - ДОДАНО */}
         <div className="nav-tabs-wrapper">
         <div className="nav-tabs">
-          <button 
-            className={`nav-tab ${currentTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('dashboard')}
-          >
-            📊 Dashboard
-          </button>
-          <button 
-            className={`nav-tab ${currentTab === 'proof' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('proof')}
-          >
-            🔐 Proof of Autonomy
-          </button>
-        </div>
+  <button 
+    className={`nav-tab ${currentTab === 'dashboard' ? 'active' : ''}`}
+    onClick={() => setCurrentTab('dashboard')}
+  >
+    📊 Dashboard
+  </button>
+  <button 
+    className={`nav-tab ${currentTab === 'proof' ? 'active' : ''}`}
+    onClick={() => setCurrentTab('proof')}
+  >
+    🔍 Proof of Autonomy
+  </button>
+  <button 
+    className={`nav-tab ${currentTab === 'analytics' ? 'active' : ''}`}
+    onClick={() => setCurrentTab('analytics')}
+  >
+    📈 Analytics
+  </button>
+</div>
         </div>
       </header>
 
@@ -344,6 +351,10 @@ function App() {
         {currentTab === 'proof' && (
           <Proof />
         )}
+        {/* Analytics Tab */}
+{currentTab === 'analytics' && (
+  <Analytics />
+)}
       </main>
 
       {/* Footer */}
