@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 function Learning() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAllTimeline, setShowAllTimeline] = useState(false);
 
   useEffect(() => {
     fetchLearningData();
@@ -144,7 +145,9 @@ function Learning() {
         </p>
 
         <div className="timeline">
-          {confidenceOverTime.map((period, idx) => {
+          {confidenceOverTime
+            .slice(-( showAllTimeline ? confidenceOverTime.length : 5))
+            .map((period, idx) => {
             const confidence = (
               parseFloat(period.avg_confidence) * 100
             ).toFixed(1);
@@ -183,6 +186,14 @@ function Learning() {
             );
           })}
         </div>
+        {confidenceOverTime.length > 5 && (
+          <button 
+            className="learning-show-more"
+            onClick={() => setShowAllTimeline(!showAllTimeline)}
+          >
+            {showAllTimeline ? 'Show latest 5' : `Show all ${confidenceOverTime.length} periods`}
+          </button>
+        )}
       </div>
 
       {/* Voting Accuracy */}
@@ -253,32 +264,28 @@ function Learning() {
             <div className="insight-icon">🎯</div>
             <h3>Consistent High Performance</h3>
             <p>
-              55% of all decisions made with 90-100% confidence, showing strong
-              autonomous capability
+              {metrics.highConfidenceRate} of {metrics.totalActions} decisions made with 90-100% confidence, showing strong autonomous capability
             </p>
           </div>
           <div className="insight-card">
             <div className="insight-icon">📊</div>
             <h3>Multi-Signal Evaluation</h3>
             <p>
-              Combines objective metrics (40%) with AI reasoning (60%) for
-              balanced decision-making
+              Combines objective metrics (40%) with AI reasoning (60%) for balanced decision-making
             </p>
           </div>
           <div className="insight-card">
             <div className="insight-icon">🔄</div>
             <h3>Adaptive Behavior</h3>
             <p>
-              Confidence varies based on project quality, demonstrating nuanced
-              evaluation capability
+              Average confidence of {metrics.averageConfidence}% across {metrics.totalActions} actions, demonstrating nuanced evaluation capability
             </p>
           </div>
           <div className="insight-card">
             <div className="insight-icon">✅</div>
             <h3>Community Alignment</h3>
             <p>
-              High-scored projects correlate with community upvotes, validating
-              evaluation accuracy
+              Average project score {avgOurScore.toFixed(1)}/10 correlates with community upvotes, validating evaluation accuracy
             </p>
           </div>
         </div>
