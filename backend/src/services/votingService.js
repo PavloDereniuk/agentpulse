@@ -1,48 +1,48 @@
 /**
  * Voting Service - Enhanced Version
- * 
+ *
  * Intelligently votes for quality projects in the hackathon.
- * 
+ *
  * Strategy:
  * - Hybrid evaluation: objective metrics (40%) + Claude analysis (60%)
  * - Hackathon-friendly scoring (projects are WIP)
  * - Vote for genuinely good projects (not vote exchange!)
  * - Rate limit to avoid spam
  * - Log all votes on-chain for transparency
- * 
+ *
  * @author AgentPulse (Agent #503)
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import { ColosseumAPI } from './colosseumAPI.js';
-import { DatabaseService } from './database.js';
-import { SolanaService } from './solanaService.js';
-import { Logger } from '../utils/logger.js';
-import { ReasoningService } from './reasoningService.js';
-import { ACTION_TYPES } from './solanaService.js';
+import Anthropic from "@anthropic-ai/sdk";
+import { ColosseumAPI } from "./colosseumAPI.js";
+import { DatabaseService } from "./database.js";
+import { SolanaService } from "./solanaService.js";
+import { Logger } from "../utils/logger.js";
+import { ReasoningService } from "./reasoningService.js";
+import { ACTION_TYPES } from "./solanaService.js";
 
 export class VotingService {
   constructor() {
     this.api = new ColosseumAPI();
     this.db = new DatabaseService();
     this.solana = new SolanaService();
-    this.logger = new Logger('VotingService');
-     this.reasoningService = new ReasoningService();
-    
+    this.logger = new Logger("VotingService");
+    this.reasoningService = new ReasoningService();
+
     // Initialize Claude for project evaluation
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
-    
+
     // Config
     this.config = {
-      maxVotesPerDay: 25, 
-     minScoreToVote: 5.5, 
-    excellenceThreshold: 7.5, 
-    skipOwnProject: true,
-    ownProjectId: 244, 
+      maxVotesPerDay: 25,
+      minScoreToVote: 5.5,
+      excellenceThreshold: 7.5,
+      skipOwnProject: true,
+      ownProjectId: 244,
     };
-    
+
     // Stats
     this.stats = {
       projectsEvaluated: 0,
@@ -55,24 +55,26 @@ export class VotingService {
    * Main function: Evaluate and vote for quality projects
    */
   async evaluateAndVote() {
-    this.logger.info('🗳️ Starting voting cycle...');
+    this.logger.info("🗳️ Starting voting cycle...");
 
     try {
       // Check daily vote limit
       const todayVotes = await this.getTodayVoteCount();
       if (todayVotes >= this.config.maxVotesPerDay) {
-        this.logger.info(`Daily vote limit reached (${todayVotes}/${this.config.maxVotesPerDay})`);
-        return { evaluated: 0, voted: 0, reason: 'daily_limit' };
+        this.logger.info(
+          `Daily vote limit reached (${todayVotes}/${this.config.maxVotesPerDay})`,
+        );
+        return { evaluated: 0, voted: 0, reason: "daily_limit" };
       }
 
       const remainingVotes = this.config.maxVotesPerDay - todayVotes;
 
       // Get projects we haven't voted for yet
       const projects = await this.getUnvotedProjects();
-      
+
       if (projects.length === 0) {
-        this.logger.info('No new projects to evaluate');
-        return { evaluated: 0, voted: 0, reason: 'no_projects' };
+        this.logger.info("No new projects to evaluate");
+        return { evaluated: 0, voted: 0, reason: "no_projects" };
       }
 
       this.logger.info(`Found ${projects.length} projects to evaluate`);
@@ -83,7 +85,7 @@ export class VotingService {
       // Evaluate and vote
       for (const project of projects) {
         if (voted >= remainingVotes) break;
-        
+
         // Skip own project
         if (project.id === this.config.ownProjectId) continue;
 
@@ -91,43 +93,47 @@ export class VotingService {
         this.stats.projectsEvaluated++;
 
         // HYBRID EVALUATION: Objective + Claude
-const objectiveScore = this.calculateObjectiveScore(project);
-const claudeEval = await this.evaluateWithClaude(project);
+        const objectiveScore = this.calculateObjectiveScore(project);
+        const claudeEval = await this.evaluateWithClaude(project);
 
-// Validate scores
-const validObjectiveScore = typeof objectiveScore === 'number' ? objectiveScore : 5;
-const validClaudeScore = typeof claudeEval?.score === 'number' ? claudeEval.score : 5;
+        // Validate scores
+        const validObjectiveScore =
+          typeof objectiveScore === "number" ? objectiveScore : 5;
+        const validClaudeScore =
+          typeof claudeEval?.score === "number" ? claudeEval.score : 5;
 
-// Combine: 40% objective + 60% Claude
-const finalScore = (validObjectiveScore * 0.4) + (validClaudeScore * 0.6);
+        // Combine: 40% objective + 60% Claude
+        const finalScore = validObjectiveScore * 0.4 + validClaudeScore * 0.6;
 
-const evaluation = {
-  projectId: project.id,
-  projectName: project.name,
-  objectiveScore: validObjectiveScore,
-  claudeScore: validClaudeScore,
-  finalScore: Math.round(finalScore * 10) / 10,
-  breakdown: {
-    objective: validObjectiveScore,
-    claude: validClaudeScore,
-    innovation: claudeEval?.breakdown?.innovation || 5,
-    effort: claudeEval?.breakdown?.effort || 5,
-    potential: claudeEval?.breakdown?.potential || 5,
-    fit: claudeEval?.breakdown?.fit || 5,
-  },
-  reasoning: claudeEval?.reasoning || 'Evaluation completed',
-  shouldVote: finalScore >= this.config.minScoreToVote,
-  evaluatedAt: new Date().toISOString()
-};
+        const evaluation = {
+          projectId: project.id,
+          projectName: project.name,
+          objectiveScore: validObjectiveScore,
+          claudeScore: validClaudeScore,
+          finalScore: Math.round(finalScore * 10) / 10,
+          breakdown: {
+            objective: validObjectiveScore,
+            claude: validClaudeScore,
+            innovation: claudeEval?.breakdown?.innovation || 5,
+            effort: claudeEval?.breakdown?.effort || 5,
+            potential: claudeEval?.breakdown?.potential || 5,
+            fit: claudeEval?.breakdown?.fit || 5,
+          },
+          reasoning: claudeEval?.reasoning || "Evaluation completed",
+          shouldVote: finalScore >= this.config.minScoreToVote,
+          evaluatedAt: new Date().toISOString(),
+        };
 
-this.logger.info(
-  `Project ${project.id} (${project.name}): ` +
-  `Obj=${validObjectiveScore.toFixed(1)}/10, Claude=${validClaudeScore.toFixed(1)}/10, ` +
-  `Final=${evaluation.finalScore.toFixed(1)}/10`
-);
+        this.logger.info(
+          `Project ${project.id} (${project.name}): ` +
+            `Obj=${validObjectiveScore.toFixed(1)}/10, Claude=${validClaudeScore.toFixed(1)}/10, ` +
+            `Final=${evaluation.finalScore.toFixed(1)}/10`,
+        );
         // Priority voting for excellent projects
         if (evaluation.finalScore >= this.config.excellenceThreshold) {
-         this.logger.info(`⭐ EXCELLENT PROJECT: ${project.name} (${evaluation.finalScore}/10)`);
+          this.logger.info(
+            `⭐ EXCELLENT PROJECT: ${project.name} (${evaluation.finalScore}/10)`,
+          );
         }
 
         // Store evaluation
@@ -142,19 +148,22 @@ this.logger.info(
             this.stats.lastVoteTime = Date.now();
           }
         } else {
-          this.logger.info(`Project ${project.id} score ${evaluation.finalScore}/10 - below threshold`);
+          this.logger.info(
+            `Project ${project.id} score ${evaluation.finalScore}/10 - below threshold`,
+          );
         }
 
         // Rate limiting
         await this.delay(2000);
       }
 
-      this.logger.info(`✅ Voting complete: ${evaluated} evaluated, ${voted} votes given`);
-      
-      return { evaluated, voted };
+      this.logger.info(
+        `✅ Voting complete: ${evaluated} evaluated, ${voted} votes given`,
+      );
 
+      return { evaluated, voted };
     } catch (error) {
-      this.logger.error('Voting cycle failed:', error.message);
+      this.logger.error("Voting cycle failed:", error.message);
       throw error;
     }
   }
@@ -181,10 +190,16 @@ this.logger.info(
     if (project.presentationLink || project.presentationLink) {
       score += 2.0;
       // Bonus for deployed apps (not just GitHub links)
-      const demoLink = project.presentationLink || project.presentationLink || '';
-      if (demoLink.includes('vercel') || demoLink.includes('netlify') || 
-          demoLink.includes('railway') || demoLink.includes('.app') ||
-          demoLink.includes('.xyz') || demoLink.includes('.com')) {
+      const demoLink =
+        project.presentationLink || project.presentationLink || "";
+      if (
+        demoLink.includes("vercel") ||
+        demoLink.includes("netlify") ||
+        demoLink.includes("railway") ||
+        demoLink.includes(".app") ||
+        demoLink.includes(".xyz") ||
+        demoLink.includes(".com")
+      ) {
         score += 1.0;
       }
     }
@@ -193,8 +208,10 @@ this.logger.info(
     if (project.repoLink) {
       score += 1.5;
       // Bonus if not a placeholder
-      if (!project.repoLink.includes('github.com/user') && 
-          !project.repoLink.includes('github.com/example')) {
+      if (
+        !project.repoLink.includes("github.com/user") &&
+        !project.repoLink.includes("github.com/example")
+      ) {
         score += 0.5;
       }
     }
@@ -215,11 +232,11 @@ IMPORTANT CONTEXT: This is a HACKATHON, not a finished product competition. Many
 
 Project Details:
 - Name: ${project.name}
-- Tagline: ${project.tagline || 'N/A'}
-- Description: ${project.description || 'N/A'}
-- GitHub: ${project.repoLink ? 'Yes' : 'No'}
-- Demo: ${project.presentationLink || project.presentationLink ? 'Yes' : 'No'}
-- Video: ${project.presentationLink ? 'Yes' : 'No'}
+- Tagline: ${project.tagline || "N/A"}
+- Description: ${project.description || "N/A"}
+- GitHub: ${project.repoLink ? "Yes" : "No"}
+- Demo: ${project.presentationLink || project.presentationLink ? "Yes" : "No"}
+- Video: ${project.presentationLink ? "Yes" : "No"}
 
 Evaluate on:
 1. **Innovation** (1-10): Is the idea interesting? Does it solve a problem?
@@ -247,13 +264,13 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
 
     try {
       const response = await this.anthropic.messages.create({
-        model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+        model: process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514",
         max_tokens: 400,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: "user", content: prompt }],
       });
 
       const text = response.content[0]?.text?.trim();
-      
+
       // Parse JSON response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -264,9 +281,9 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
             innovation: evaluation.innovation,
             effort: evaluation.effort,
             potential: evaluation.potential,
-            fit: evaluation.fit
+            fit: evaluation.fit,
           },
-          reasoning: evaluation.reasoning || 'Evaluated by Claude'
+          reasoning: evaluation.reasoning || "Evaluated by Claude",
         };
       }
 
@@ -274,15 +291,14 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
       return {
         score: 5,
         breakdown: { innovation: 5, effort: 5, potential: 5, fit: 5 },
-        reasoning: 'Unable to fully evaluate'
+        reasoning: "Unable to fully evaluate",
       };
-
     } catch (error) {
-      this.logger.error('Claude evaluation failed:', error.message);
-      return { 
-        score: 5, 
+      this.logger.error("Claude evaluation failed:", error.message);
+      return {
+        score: 5,
         breakdown: { innovation: 5, effort: 5, potential: 5, fit: 5 },
-        reasoning: error.message 
+        reasoning: error.message,
       };
     }
   }
@@ -291,76 +307,87 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
    * Vote for a project
    */
   /**
- * Vote for a project with full reasoning
- */
-async voteForProject(project, evaluation) {
-  try {
-    // Call Colosseum API to vote
-    await this.api.voteForProject(project.id);
-    
-    this.logger.info(
-      `✅ Voted for "${project.name}" ` +
-      `(final score: ${evaluation.finalScore}/10, ` +
-      `obj: ${evaluation.objectiveScore}/10, ` +
-      `claude: ${evaluation.claudeScore}/10)`
-    );
-    
-    // Generate detailed reasoning for this vote
-    const reasoning = this.reasoningService.generateVoteReasoning(project, evaluation);
-    
-    this.logger.info(`📝 Generated reasoning with confidence: ${(reasoning.confidence * 100).toFixed(1)}%`);
-    
-    // Log the vote to database
-    await this.logVote(project, evaluation);
-    
-    // Log vote on-chain with full reasoning for transparency
-    let solanaTx = null;
-    if (this.solana.canWrite()) {
-      try {
-        solanaTx = await this.solana.logActionOnChain({
-          type: ACTION_TYPES.VOTE_CAST,
-          summary: `Voted for "${project.name}" (score: ${evaluation.finalScore}/10)`,
-          reasoning: reasoning.reasoning,
-          confidence: reasoning.confidence,
-          factors: reasoning.factors,
-          metadata: {
-            projectId: project.id,
-            projectName: project.name,
-            score: evaluation.finalScore,
-            objectiveScore: evaluation.objectiveScore,
-            claudeScore: evaluation.claudeScore,
-            innovation: evaluation.breakdown.innovation,
-            effort: evaluation.breakdown.effort,
-            potential: evaluation.breakdown.potential,
-            fit: evaluation.breakdown.fit,
-          }
-        });
-        
-        this.logger.info(`📝 Vote logged on-chain: ${solanaTx.signature.slice(0, 16)}...`);
-        this.logger.info(`   Explorer: ${solanaTx.explorerUrl}`);
-        
-        // Update vote record with Solana signature
-        await this.db.pool.query(`
+   * Vote for a project with full reasoning
+   */
+  async voteForProject(project, evaluation) {
+    try {
+      // Call Colosseum API to vote
+      await this.api.voteForProject(project.id);
+
+      this.logger.info(
+        `✅ Voted for "${project.name}" ` +
+          `(final score: ${evaluation.finalScore}/10, ` +
+          `obj: ${evaluation.objectiveScore}/10, ` +
+          `claude: ${evaluation.claudeScore}/10)`,
+      );
+
+      // Generate detailed reasoning for this vote
+      const reasoning = this.reasoningService.generateVoteReasoning(
+        project,
+        evaluation,
+      );
+
+      this.logger.info(
+        `📝 Generated reasoning with confidence: ${(reasoning.confidence * 100).toFixed(1)}%`,
+      );
+
+      // Log the vote to database
+      await this.logVote(project, evaluation);
+
+      // Log vote on-chain with full reasoning for transparency
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: ACTION_TYPES.VOTE_CAST,
+            summary: `Voted for "${project.name}" (score: ${evaluation.finalScore}/10)`,
+            reasoning: reasoning.reasoning,
+            confidence: reasoning.confidence,
+            factors: reasoning.factors,
+            metadata: {
+              projectId: project.id,
+              projectName: project.name,
+              score: evaluation.finalScore,
+              objectiveScore: evaluation.objectiveScore,
+              claudeScore: evaluation.claudeScore,
+              innovation: evaluation.breakdown.innovation,
+              effort: evaluation.breakdown.effort,
+              potential: evaluation.breakdown.potential,
+              fit: evaluation.breakdown.fit,
+            },
+          });
+
+          this.logger.info(
+            `📝 Vote logged on-chain: ${solanaTx.signature.slice(0, 16)}...`,
+          );
+          this.logger.info(`   Explorer: ${solanaTx.explorerUrl}`);
+
+          // Update vote record with Solana signature
+          await this.db.pool.query(
+            `
           UPDATE project_votes 
           SET solana_tx = $1 
           WHERE project_id = $2
-        `, [solanaTx.signature, project.id]);
-        
-      } catch (solanaError) {
-        this.logger.warn('Failed to log vote on-chain:', solanaError.message);
-        // Continue - voting succeeded even if on-chain log failed
+        `,
+            [solanaTx.signature, project.id],
+          );
+        } catch (solanaError) {
+          this.logger.warn("Failed to log vote on-chain:", solanaError.message);
+          // Continue - voting succeeded even if on-chain log failed
+        }
+      } else {
+        this.logger.warn("⚠️ Solana not configured - vote not logged on-chain");
       }
-    } else {
-      this.logger.warn('⚠️ Solana not configured - vote not logged on-chain');
-    }
-    
-    return true;
 
-  } catch (error) {
-    this.logger.error(`Failed to vote for project ${project.id}:`, error.message);
-    return false;
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to vote for project ${project.id}:`,
+        error.message,
+      );
+      return false;
+    }
   }
-}
 
   /**
    * Get projects we haven't voted for
@@ -369,29 +396,29 @@ async voteForProject(project, evaluation) {
     try {
       // Get all projects
       const allProjects = await this.api.getProjects();
-      
+
       // Get IDs of projects we've already evaluated/voted
       const votedIds = await this.getVotedProjectIds();
-      
+
       // Filter to unvoted projects
-      const unvoted = allProjects.filter(p => 
-        !votedIds.includes(p.id) && 
-        p.id !== this.config.ownProjectId
+      const unvoted = allProjects.filter(
+        (p) => !votedIds.includes(p.id) && p.id !== this.config.ownProjectId,
       );
-      
+
       // Sort by completeness (prefer more complete projects)
       return unvoted.sort((a, b) => {
-        const scoreA = (a.demoUrl || a.technicalDemoLink ? 3 : 0) + 
-                      (a.githubUrl ? 2 : 0) + 
-                      (a.description?.length > 100 ? 1 : 0);
-        const scoreB = (b.demoUrl || b.technicalDemoLink ? 3 : 0) + 
-                      (b.githubUrl ? 2 : 0) + 
-                      (b.description?.length > 100 ? 1 : 0);
+        const scoreA =
+          (a.demoUrl || a.technicalDemoLink ? 3 : 0) +
+          (a.githubUrl ? 2 : 0) +
+          (a.description?.length > 100 ? 1 : 0);
+        const scoreB =
+          (b.demoUrl || b.technicalDemoLink ? 3 : 0) +
+          (b.githubUrl ? 2 : 0) +
+          (b.description?.length > 100 ? 1 : 0);
         return scoreB - scoreA;
       });
-
     } catch (error) {
-      this.logger.error('Failed to get unvoted projects:', error.message);
+      this.logger.error("Failed to get unvoted projects:", error.message);
       return [];
     }
   }
@@ -404,7 +431,7 @@ async voteForProject(project, evaluation) {
       const result = await this.db.pool.query(`
         SELECT project_id FROM project_votes
       `);
-      return result.rows.map(r => r.project_id);
+      return result.rows.map((r) => r.project_id);
     } catch (error) {
       // Table might not exist yet
       return [];
@@ -447,30 +474,28 @@ async voteForProject(project, evaluation) {
         )
       `);
 
-      await this.db.pool.query(`
-        INSERT INTO project_evaluations 
-        (project_id, objective_score, claude_score, final_score, breakdown, reasoning, should_vote)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (project_id) DO UPDATE SET
-          objective_score = $2,
-          claude_score = $3,
-          final_score = $4,
-          breakdown = $5,
-          reasoning = $6,
-          should_vote = $7,
-          created_at = NOW()
-      `, [
-        projectId,
-        evaluation.objectiveScore,
-        evaluation.claudeScore,
-        evaluation.finalScore,
-        JSON.stringify(evaluation.breakdown),
-        evaluation.reasoning,
-        evaluation.shouldVote
-      ]);
-
+      await this.db.pool.query(
+        `
+  INSERT INTO project_evaluations 
+  (project_id, objective_score, claude_score, reasoning, should_vote)
+  VALUES ($1, $2, $3, $4, $5)
+  ON CONFLICT (project_id) DO UPDATE SET
+    objective_score = $2,
+    claude_score = $3,
+    reasoning = $4,
+    should_vote = $5,
+    created_at = NOW()
+`,
+        [
+          projectId,
+          evaluation.objectiveScore,
+          evaluation.claudeScore,
+          evaluation.reasoning,
+          evaluation.shouldVote,
+        ],
+      );
     } catch (error) {
-      this.logger.error('Failed to store evaluation:', error.message);
+      this.logger.error("Failed to store evaluation:", error.message);
     }
   }
 
@@ -491,19 +516,16 @@ async voteForProject(project, evaluation) {
         )
       `);
 
-      await this.db.pool.query(`
+      await this.db.pool.query(
+        `
         INSERT INTO project_votes (project_id, project_name, score, reasoning)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (project_id) DO NOTHING
-      `, [
-        project.id, 
-        project.name, 
-        evaluation.finalScore, 
-        evaluation.reasoning
-      ]);
-
+      `,
+        [project.id, project.name, evaluation.finalScore, evaluation.reasoning],
+      );
     } catch (error) {
-      this.logger.error('Failed to log vote:', error.message);
+      this.logger.error("Failed to log vote:", error.message);
     }
   }
 
@@ -511,7 +533,7 @@ async voteForProject(project, evaluation) {
    * Helper: delay execution
    */
   delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
