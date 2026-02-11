@@ -139,8 +139,8 @@ export class VotingService {
         // Store evaluation
         await this.storeEvaluation(project.id, evaluation);
 
-        // Vote if quality meets threshold (5.5+) or excellence threshold (7.5+)
-        if (evaluation.shouldVote && finalScore >= this.config.minScoreToVote) {
+        // Vote if quality meets threshold
+        if (evaluation.shouldVote) {
           const success = await this.voteForProject(project, evaluation);
           if (success) {
             voted++;
@@ -187,11 +187,11 @@ export class VotingService {
     }
 
     // 3. Demo/deployment (3 points - most important!)
-    if (project.presentationLink || project.presentationLink) {
+    if (project.technicalDemoLink || project.presentationLink) {
       score += 2.0;
       // Bonus for deployed apps (not just GitHub links)
       const demoLink =
-        project.presentationLink || project.presentationLink || "";
+        project.technicalDemoLink || project.presentationLink || "";
       if (
         demoLink.includes("vercel") ||
         demoLink.includes("netlify") ||
@@ -235,7 +235,7 @@ Project Details:
 - Tagline: ${project.tagline || "N/A"}
 - Description: ${project.description || "N/A"}
 - GitHub: ${project.repoLink ? "Yes" : "No"}
-- Demo: ${project.presentationLink || project.presentationLink ? "Yes" : "No"}
+- Demo: ${project.technicalDemoLink ? "Yes" : "No"}
 - Video: ${project.presentationLink ? "Yes" : "No"}
 
 Evaluate on:

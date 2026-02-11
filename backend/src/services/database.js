@@ -9,11 +9,15 @@ import { Logger } from "../utils/logger.js";
 
 const { Pool } = pg;
 
+let _instance = null;
+
 export class DatabaseService {
   constructor() {
+    if (_instance) return _instance;
     this.logger = new Logger("Database");
     this.pool = null;
     this.initialize();
+    _instance = this;
   }
 
   /**

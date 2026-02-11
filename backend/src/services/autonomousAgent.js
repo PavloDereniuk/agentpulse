@@ -1,0 +1,1142 @@
+/**
+ * AgentPulse Autonomous Agent
+ *
+ * This is the brain of AgentPulse - responsible for all autonomous decisions
+ * and actions during the hackathon.
+ *
+ * Autonomous Capabilities:
+ * - Data collection every 5 minutes
+ * - Insight generation every hour
+ * - Forum participation based on quality threshold
+ * - Comment responses every 30 minutes
+ * - Project voting (intelligent, merit-based)
+ * - Self-improvement through feedback loops
+ * - ON-CHAIN LOGGING of all autonomous actions
+ *
+ * @author AgentPulse (Agent #503)
+ */
+
+import cron from "node-cron";
+import { ColosseumAPI } from "../services/colosseumAPI.js";
+import { InsightGenerator } from "../services/insightGenerator.js";
+import { ForumService } from "../services/forumService.js";
+import { DatabaseService } from "../services/database.js";
+import { SolanaService } from "../services/solanaService.js";
+import { CommentResponder } from "../services/commentResponder.js";
+import { VotingService } from "../services/votingService.js";
+import { Logger } from "../utils/logger.js";
+import { QualityChecker } from "../utils/qualityChecker.js";
+import { DailyDigestService } from "../services/dailyDigestService.js";
+import { SpotlightService } from "../services/spotlightService.js";
+import { LeaderboardService } from "../services/leaderboardService.js";
+import { SelfImproveService } from "../services/selfImproveService.js";
+import { ForumEngager } from "../services/forumEngager.js";
+
+class AutonomousAgent {
+  constructor() {
+    this.api = new ColosseumAPI();
+    this.insightGen = new InsightGenerator();
+    this.forum = new ForumService();
+    this.db = new DatabaseService();
+    this.solana = new SolanaService();
+    this.commentResponder = new CommentResponder();
+    this.forumEngager = new ForumEngager();
+    this.votingService = new VotingService();
+    this.dailyDigest = new DailyDigestService();
+    this.spotlight = new SpotlightService();
+    this.leaderboard = new LeaderboardService();
+    this.selfImprove = new SelfImproveService();
+    this.logger = new Logger("AutonomousAgent");
+    this.qualityChecker = new QualityChecker();
+
+    // State
+    this.isRunning = false;
+    this.stats = {
+      dataCollections: 0,
+      insightsGenerated: 0,
+      forumPosts: 0,
+      forumComments: 0,
+      commentResponses: 0,
+      projectsEvaluated: 0,
+      votesGiven: 0,
+      teamMatches: 0,
+      predictions: 0,
+      improvements: 0,
+      lastPostTime: null,
+      lastCommentCheckTime: null,
+      lastVotingTime: null,
+      // Solana stats
+      onChainLogs: 0,
+      lastSolanaTx: null,
+      digestsGenerated: 0,
+      lastDigestTime: null,
+      spotlightsGenerated: 0,
+      lastSpotlightTime: null,
+      leaderboardSnapshots: 0,
+      selfImprovements: 0,
+      strategyVersion: 1,
+      forumEngagements: 0,
+    };
+  }
+
+  /**
+   * Start autonomous operations
+   */
+  async start() {
+    this.logger.info("🤖 AgentPulse starting autonomous operations...");
+    this.isRunning = true;
+
+    // Check Solana connection
+    await this.checkSolanaStatus();
+
+    // Initial data collection
+    await this.collectData();
+
+    // Load persisted stats from database
+    await this.loadStatsFromDB();
+
+    // Schedule autonomous loops
+    this.scheduleDataCollection();
+    this.scheduleHourlyAnalysis();
+    this.scheduleCommentResponses();
+    this.scheduleForumEngagement();
+    this.scheduleVoting();
+    this.scheduleDailyDigest();
+    this.scheduleSpotlight();
+    this.scheduleLeaderboardSnapshots();
+    this.scheduleSelfImprovement();
+
+    this.logger.info("✅ All autonomous loops scheduled and running");
+
+    setTimeout(async () => {
+      try {
+        await this.leaderboard.storeSnapshot();
+        this.stats.leaderboardSnapshots++;
+        this.logger.info("📸 Initial leaderboard snapshot stored");
+      } catch (e) {
+        this.logger.warn("Initial snapshot failed:", e.message);
+      }
+    }, 10000);
+  }
+
+  /**
+   * Check Solana network status and wallet
+   */
+  async checkSolanaStatus() {
+    try {
+      const status = await this.solana.getNetworkStatus();
+      this.logger.info(
+        `🔗 Solana ${status.network}: slot ${status.slot}, health: ${status.health}`,
+      );
+
+      if (this.solana.canWrite()) {
+        const balance = await this.solana.getAgentWalletBalance();
+        this.logger.info(
+          `💰 Agent wallet balance: ${balance.solFormatted} SOL`,
+        );
+
+        if (balance.sol < 0.01 && this.solana.network === "devnet") {
+          this.logger.info("⚠️ Low balance, requesting devnet airdrop...");
+          await this.solana.requestAirdrop(1);
+        }
+      } else {
+        this.logger.warn("⚠️ Solana write operations disabled (no wallet key)");
+      }
+    } catch (error) {
+      this.logger.error("Solana status check failed:", error.message);
+    }
+  }
+
+  /**
+   * Data Collection Loop - Every 5 minutes
+   */
+  scheduleDataCollection() {
+    cron.schedule("*/5 * * * *", async () => {
+      if (!this.isRunning) return;
+
+      this.logger.info("📊 Starting data collection cycle...");
+      await this.collectData();
+    });
+
+    this.logger.info("✅ Data collection scheduled (every 5 minutes)");
+  }
+
+  /**
+   * Analysis & Action Loop - Every hour
+   */
+  scheduleHourlyAnalysis() {
+    cron.schedule("0 * * * *", async () => {
+      if (!this.isRunning) return;
+
+      this.logger.info("🧠 Starting hourly analysis cycle...");
+      await this.analyzeAndAct();
+    });
+
+    this.logger.info("✅ Hourly analysis scheduled");
+  }
+
+  /**
+   * Comment Response Loop - Every 30 minutes
+   */
+  scheduleCommentResponses() {
+    // Run at :15 and :45 of each hour
+    cron.schedule("15,45 * * * *", async () => {
+      if (!this.isRunning) return;
+
+      this.logger.info("💬 Starting comment response cycle...");
+      await this.respondToComments();
+    });
+
+    this.logger.info("✅ Comment responses scheduled (every 30 minutes)");
+  }
+
+  /**
+   * Forum Engagement Loop - Every 45 minutes
+   * Proactively comments on other agents' posts
+   */
+  scheduleForumEngagement() {
+    // Run at :00 and :45 of every hour (offset from comment responses at :15 and :45)
+    cron.schedule("5,25,50 * * * *", async () => {
+      try {
+        this.logger.info("🗣️ Starting proactive forum engagement...");
+        const result = await this.forumEngager.engage();
+        if (result.engaged > 0) {
+          this.stats.forumEngagements += result.engaged;
+        }
+      } catch (error) {
+        this.logger.error("Forum engagement error:", error.message);
+      }
+    });
+    this.logger.info("✅ Forum engagement scheduled (every ~45 min)");
+  }
+
+  /**
+   * Voting Loop - Every 4 hours
+   */
+  scheduleVoting() {
+    // Run at 8:00, 12:00, 16:00, 20:00 UTC
+    cron.schedule("0 8,12,16,20 * * *", async () => {
+      if (!this.isRunning) return;
+
+      this.logger.info("🗳️ Starting voting cycle...");
+      await this.evaluateAndVote();
+    });
+
+    this.logger.info("✅ Voting scheduled (every 4 hours)");
+  }
+
+  /**
+   * Daily Digest — 9:00 and 18:00 UTC
+   */
+  scheduleDailyDigest() {
+    cron.schedule("0 9,18 * * *", async () => {
+      if (!this.isRunning) return;
+      this.logger.info("📰 Starting Daily Digest...");
+      await this.runDailyDigest();
+    });
+    this.logger.info("✅ Daily Digest scheduled (9:00 + 18:00 UTC)");
+  }
+
+  async runDailyDigest() {
+    try {
+      const digest = await this.dailyDigest.generateDigest();
+
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: "DAILY_DIGEST",
+            summary: digest.title,
+            metadata: digest.stats,
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = solanaTx.signature;
+        } catch (e) {
+          this.logger.warn("On-chain digest logging failed:", e.message);
+        }
+      }
+
+      const verificationLine = solanaTx
+        ? `\n\n🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
+        : "";
+
+      // Retry with backoff if rate limited
+      let posted = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.forum.createPost({
+            title: digest.title,
+            body: digest.body + verificationLine,
+            tags: ["progress-update", "ai"],
+          });
+          posted = true;
+          break;
+        } catch (err) {
+          if (err.message?.includes("429") && attempt < 3) {
+            this.logger.warn(`Rate limited, retry ${attempt}/3 in 30s...`);
+            await new Promise((r) => setTimeout(r, 30000));
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      await this.dailyDigest.storeDigest(digest);
+      this.stats.digestsGenerated++;
+      this.stats.forumPosts++;
+      this.stats.lastDigestTime = Date.now();
+      this.stats.lastPostTime = Date.now();
+      this.logger.info(`✅ Daily Digest posted: "${digest.title}"`);
+
+      await this.logAutonomousAction({
+        action: "DAILY_DIGEST",
+        title: digest.title,
+        outcome: "SUCCESS",
+        solanaTx: solanaTx?.signature,
+      });
+    } catch (error) {
+      this.logger.error("Daily Digest failed:", error.message);
+      await this.logAutonomousAction({
+        action: "DAILY_DIGEST",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  async runDigest() {
+    this.logger.info("🧪 Manual trigger: Running Daily Digest");
+    await this.runDailyDigest();
+  }
+
+  scheduleSpotlight() {
+    cron.schedule("0 15 * * *", async () => {
+      if (!this.isRunning) return;
+      this.logger.info("🔦 Starting Agent Spotlight...");
+      await this.runSpotlight();
+    });
+    this.logger.info("✅ Spotlight scheduled (15:00 UTC)");
+  }
+
+  async runSpotlight() {
+    try {
+      const spotlight = await this.spotlight.generateSpotlight();
+      if (!spotlight) {
+        this.logger.info("No eligible project for spotlight today");
+        return;
+      }
+
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: "AGENT_SPOTLIGHT",
+            summary: `Spotlight: ${spotlight.projectName}`,
+            metadata: { projectId: spotlight.projectId },
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = solanaTx.signature;
+        } catch (e) {
+          this.logger.warn("On-chain spotlight logging failed:", e.message);
+        }
+      }
+
+      const verificationLine = solanaTx
+        ? `\n\n🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
+        : "";
+
+      // Retry with backoff
+      let posted = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.forum.createPost({
+            title: spotlight.title,
+            body: spotlight.body + verificationLine,
+            tags: ["progress-update", "ai"],
+          });
+          posted = true;
+          break;
+        } catch (err) {
+          if (err.message?.includes("429") && attempt < 3) {
+            this.logger.warn(`Rate limited, retry ${attempt}/3 in 30s...`);
+            await new Promise((r) => setTimeout(r, 30000));
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      this.stats.spotlightsGenerated++;
+      this.stats.forumPosts++;
+      this.stats.lastSpotlightTime = Date.now();
+      this.stats.lastPostTime = Date.now();
+      this.logger.info(`✅ Spotlight posted: "${spotlight.title}"`);
+
+      await this.logAutonomousAction({
+        action: "AGENT_SPOTLIGHT",
+        title: spotlight.title,
+        projectId: spotlight.projectId,
+        outcome: "SUCCESS",
+        solanaTx: solanaTx?.signature,
+      });
+    } catch (error) {
+      this.logger.error("Spotlight failed:", error.message);
+      await this.logAutonomousAction({
+        action: "AGENT_SPOTLIGHT",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  async runSpotlightManual() {
+    this.logger.info("🧪 Manual trigger: Running Spotlight");
+    await this.runSpotlight();
+  }
+
+  scheduleLeaderboardSnapshots() {
+    cron.schedule("0 */4 * * *", async () => {
+      if (!this.isRunning) return;
+      try {
+        await this.leaderboard.storeSnapshot();
+        this.stats.leaderboardSnapshots++;
+      } catch (e) {
+        this.logger.error("Leaderboard snapshot failed:", e.message);
+      }
+    });
+    this.logger.info("✅ Leaderboard snapshots scheduled (every 4h)");
+  }
+
+  scheduleSelfImprovement() {
+    cron.schedule("0 */6 * * *", async () => {
+      if (!this.isRunning) return;
+      this.logger.info("🧬 Starting Self-Improvement cycle...");
+      await this.runSelfImprovement();
+    });
+    this.logger.info("✅ Self-Improvement scheduled (every 6h)");
+  }
+
+  async runSelfImprovement() {
+    try {
+      const result = await this.selfImprove.runImprovementCycle();
+      this.stats.selfImprovements++;
+      this.stats.strategyVersion = result.strategyVersion;
+      this.logger.info(
+        `✅ Self-improvement complete: v${result.strategyVersion}, ${result.adaptations.length} changes`,
+      );
+
+      await this.logAutonomousAction({
+        action: "SELF_IMPROVEMENT",
+        outcome: "SUCCESS",
+        strategyVersion: result.strategyVersion,
+        adaptations: result.adaptations.length,
+      });
+    } catch (error) {
+      this.logger.error("Self-improvement failed:", error.message);
+      await this.logAutonomousAction({
+        action: "SELF_IMPROVEMENT",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  async runSelfImprovementManual() {
+    this.logger.info("🧪 Manual trigger: Self-Improvement");
+    await this.runSelfImprovement();
+  }
+
+  /**
+   * Respond to comments on our posts
+   */
+  async respondToComments() {
+    try {
+      this.stats.lastCommentCheckTime = Date.now();
+
+      const result = await this.commentResponder.checkAndRespond();
+
+      this.stats.commentResponses += result.responded;
+      this.stats.forumComments += result.responded;
+
+      // Log on-chain if we responded to any comments
+      if (result.responded > 0 && this.solana.canWrite()) {
+        try {
+          const tx = await this.solana.logActionOnChain({
+            type: "COMMENT_RESPONSES",
+            summary: `Responded to ${result.responded} comments`,
+            metadata: {
+              processed: result.processed,
+              responded: result.responded,
+            },
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = tx.signature;
+          this.logger.info(
+            `🔗 Comment responses logged on-chain: ${tx.signature.slice(0, 16)}...`,
+          );
+        } catch (error) {
+          this.logger.warn("On-chain logging failed:", error.message);
+        }
+      }
+
+      await this.logAutonomousAction({
+        action: "COMMENT_CHECK",
+        details: {
+          processed: result.processed,
+          responded: result.responded,
+        },
+        outcome: "SUCCESS",
+      });
+    } catch (error) {
+      this.logger.error("Comment response cycle failed:", error.message);
+      await this.logAutonomousAction({
+        action: "COMMENT_CHECK",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Load stats from database on startup
+   */
+  async loadStatsFromDB() {
+    try {
+      // Forum posts from autonomy_log
+      try {
+        const posts = await this.db.pool.query(
+          `SELECT COUNT(*) FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`,
+        );
+        this.stats.forumPosts = parseInt(posts.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+       // Forum engagements
+      try {
+        const engagements = await this.db.pool.query(
+          `SELECT COUNT(*) FROM forum_engagements`,
+        );
+        this.stats.forumEngagements = parseInt(engagements.rows[0]?.count || 0);
+      } catch (e) { /* table may not exist */ }
+
+      // Comment responses
+      try {
+        const comments = await this.db.pool.query(
+          `SELECT COUNT(*) FROM comment_responses WHERE status = 'responded'`,
+        );
+        this.stats.commentResponses = parseInt(comments.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Votes
+      try {
+        const votes = await this.db.pool.query(
+          `SELECT COUNT(*) FROM project_votes`,
+        );
+        this.stats.votesGiven = parseInt(votes.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // On-chain logs
+      try {
+        const logs = await this.db.pool.query(
+          `SELECT COUNT(*) FROM autonomy_log WHERE details::text LIKE '%solanaTx%' OR details::text LIKE '%signature%' OR details::text LIKE '%on-chain%' OR details::text LIKE '%SOLANA%'`,
+        );
+        this.stats.onChainLogs = parseInt(logs.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Digests
+      try {
+        const digests = await this.db.pool.query(
+          `SELECT COUNT(*) FROM daily_digests`,
+        );
+        this.stats.digestsGenerated = parseInt(digests.rows[0]?.count || 0);
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Spotlights
+      try {
+        const spotlights = await this.db.pool.query(
+          `SELECT COUNT(*) FROM spotlights`,
+        );
+        this.stats.spotlightsGenerated = parseInt(
+          spotlights.rows[0]?.count || 0,
+        );
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Strategy version
+      try {
+        const strategy = await this.db.pool.query(
+          `SELECT strategy_version FROM self_improvements ORDER BY created_at DESC LIMIT 1`,
+        );
+        if (strategy.rows.length > 0) {
+          this.stats.strategyVersion = strategy.rows[0].strategy_version;
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Forum comments (total responses)
+      try {
+        const comments = await this.db.pool.query(
+          `SELECT COUNT(*) FROM comment_responses WHERE status = 'responded'`,
+        );
+        this.stats.forumComments = parseInt(comments.rows[0]?.count || 0);
+        this.stats.commentResponses = this.stats.forumComments;
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      // Last timestamps
+      try {
+        const lastComment = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM comment_responses`,
+        );
+        if (lastComment.rows[0]?.last_time) {
+          this.stats.lastCommentCheckTime = new Date(
+            lastComment.rows[0].last_time,
+          ).getTime();
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      try {
+        const lastVote = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM project_votes`,
+        );
+        if (lastVote.rows[0]?.last_time) {
+          this.stats.lastVotingTime = new Date(
+            lastVote.rows[0].last_time,
+          ).getTime();
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      try {
+        const lastDigest = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM daily_digests`,
+        );
+        if (lastDigest.rows[0]?.last_time) {
+          this.stats.lastDigestTime = new Date(
+            lastDigest.rows[0].last_time,
+          ).getTime();
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      try {
+        const lastPost = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM autonomy_log WHERE action = 'FORUM_POST' AND outcome = 'SUCCESS'`,
+        );
+        if (lastPost.rows[0]?.last_time) {
+          this.stats.lastPostTime = new Date(
+            lastPost.rows[0].last_time,
+          ).getTime();
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      try {
+        const lastSpotlight = await this.db.pool.query(
+          `SELECT MAX(created_at) as last_time FROM spotlights`,
+        );
+        if (lastSpotlight.rows[0]?.last_time) {
+          this.stats.lastSpotlightTime = new Date(
+            lastSpotlight.rows[0].last_time,
+          ).getTime();
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      try {
+        const lastTx = await this.db.pool.query(
+          `SELECT details->>'solanaTx' as tx FROM autonomy_log WHERE details::text LIKE '%solanaTx%' ORDER BY created_at DESC LIMIT 1`,
+        );
+        if (lastTx.rows[0]?.tx) {
+          this.stats.lastSolanaTx = lastTx.rows[0].tx;
+        }
+      } catch (e) {
+        /* table may not exist */
+      }
+
+      this.logger.info(
+        `📊 Loaded stats from DB: ${this.stats.forumPosts} posts, ${this.stats.commentResponses} responses, ${this.stats.votesGiven} votes, ${this.stats.digestsGenerated} digests, ${this.stats.spotlightsGenerated} spotlights, ${this.stats.onChainLogs} on-chain logs, strategy v${this.stats.strategyVersion}`,
+      );
+    } catch (error) {
+      this.logger.warn("Could not load stats from DB:", error.message);
+    }
+  }
+
+  /**
+   * Evaluate projects and vote for quality ones
+   */
+  async evaluateAndVote() {
+    try {
+      this.stats.lastVotingTime = Date.now();
+
+      const result = await this.votingService.evaluateAndVote();
+
+      this.stats.projectsEvaluated += result.evaluated;
+      this.stats.votesGiven += result.voted;
+
+      // Log on-chain if we voted for any projects
+      if (result.voted > 0 && this.solana.canWrite()) {
+        try {
+          const tx = await this.solana.logActionOnChain({
+            type: "PROJECT_VOTING",
+            summary: `Voted for ${result.voted} quality projects`,
+            metadata: {
+              evaluated: result.evaluated,
+              voted: result.voted,
+            },
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = tx.signature;
+          this.logger.info(
+            `🔗 Voting activity logged on-chain: ${tx.signature.slice(0, 16)}...`,
+          );
+        } catch (error) {
+          this.logger.warn("On-chain logging failed:", error.message);
+        }
+      }
+
+      await this.logAutonomousAction({
+        action: "VOTING_CYCLE",
+        details: {
+          evaluated: result.evaluated,
+          voted: result.voted,
+        },
+        outcome: "SUCCESS",
+      });
+    } catch (error) {
+      this.logger.error("Voting cycle failed:", error.message);
+      await this.logAutonomousAction({
+        action: "VOTING_CYCLE",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Collect data from Colosseum API
+   */
+  async collectData() {
+    try {
+      const [projects, forumPosts, leaderboard] = await Promise.all([
+        this.api.getProjects(),
+        this.api.getForumPosts({ sort: "new", limit: 50 }),
+        this.api.getLeaderboard(),
+      ]);
+
+      await this.db.storeProjects(projects);
+      await this.db.storeForumPosts(forumPosts);
+      await this.db.storeLeaderboard(leaderboard);
+
+      this.stats.dataCollections++;
+
+      this.logger.info(
+        `✅ Data collected: ${projects.length} projects, ${forumPosts.length} posts`,
+      );
+
+      await this.logAutonomousAction({
+        action: "DATA_COLLECTION",
+        details: {
+          projectsCount: projects.length,
+          postsCount: forumPosts.length,
+        },
+        outcome: "SUCCESS",
+        logOnChain: false,
+      });
+    } catch (error) {
+      this.logger.error("❌ Data collection failed:", error);
+      await this.logAutonomousAction({
+        action: "DATA_COLLECTION",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Analyze data and take autonomous actions
+   */
+  async analyzeAndAct() {
+    try {
+      const analysis = await this.insightGen.analyzeRecentActivity();
+
+      this.logger.info("📊 Analysis complete:", {
+        insights: analysis.insights.length,
+        trends: analysis.trends.length,
+        opportunities: analysis.opportunities.length,
+      });
+
+      for (const insight of analysis.insights) {
+        this.logger.info("📝 Processing insight:", insight.title);
+
+        const qualityScore = await this.qualityChecker.evaluate(insight);
+
+        this.logger.info(
+          `Quality score: ${qualityScore.score}/${qualityScore.totalChecks}, passes: ${qualityScore.passesThreshold}`,
+        );
+
+        if (qualityScore.passesThreshold) {
+          this.logger.info("✅ Quality passed, deciding whether to post...");
+
+          const shouldPost = await this.decideToPost(insight, qualityScore);
+
+          this.logger.info(`Decision: ${shouldPost ? "POST" : "SKIP"}`);
+
+          if (shouldPost) {
+            this.logger.info("📝 Posting to forum...");
+            await this.postInsightToForum(insight);
+          }
+        } else {
+          this.logger.info("❌ Quality check failed, skipping");
+        }
+
+        this.stats.insightsGenerated++;
+      }
+
+      await this.identifyTeamMatches();
+      await this.updatePredictions();
+      await this.selfEvaluate();
+    } catch (error) {
+      this.logger.error("❌ Analysis failed:", error);
+    }
+  }
+
+  /**
+   * Autonomous decision: Should we post this insight?
+   */
+  async decideToPost(insight, qualityScore) {
+    const timeSinceLastPost = this.stats.lastPostTime
+      ? Date.now() - this.stats.lastPostTime
+      : Infinity;
+
+    const checks = {
+      qualityPasses: qualityScore.score >= 6,
+      notTooFrequent: timeSinceLastPost >= 3600000,
+      dailyLimit: (await this.db.getTodayPostCount()) < 5,
+      hasActionableValue: !!insight.actionable && insight.actionable.length > 0,
+      isNovel: !(await this.db.isDuplicateInsight(insight)),
+    };
+
+    const shouldPost = Object.values(checks).every((v) => v === true);
+
+    const results = Object.entries(checks).map(([check, result]) => 
+      `${result ? '✅' : '❌'} ${check}`
+    ).join(', ');
+    this.logger.info(`Post decision: ${shouldPost ? 'POST' : 'SKIP'} [${results}]`);
+
+    await this.logAutonomousAction({
+      action: "POST_DECISION",
+      decision: shouldPost ? "POST" : "SKIP",
+      reasoning: checks,
+      qualityScore: qualityScore.score,
+      logOnChain: false,
+    });
+
+    return shouldPost;
+  }
+
+  /**
+   * Post insight to forum with ON-CHAIN verification
+   */
+  async postInsightToForum(insight) {
+    try {
+      let solanaTx = null;
+      if (this.solana.canWrite()) {
+        try {
+          solanaTx = await this.solana.logActionOnChain({
+            type: "FORUM_POST",
+            summary: insight.title,
+            metadata: {
+              insightType: insight.type,
+              dataPoints: insight.dataPoints,
+            },
+          });
+          this.stats.onChainLogs++;
+          this.stats.lastSolanaTx = solanaTx.signature;
+        } catch (error) {
+          this.logger.warn(
+            "On-chain logging failed, continuing without:",
+            error.message,
+          );
+        }
+      }
+
+      const verificationLine = solanaTx
+        ? `\n  🔗 **Verified on Solana:** [${solanaTx.signature.slice(0, 16)}...](${solanaTx.explorerUrl})`
+        : "";
+
+      const postBody = `${insight.body}
+
+  ---
+
+  **About This Insight:**
+  This analysis is based on ${insight.dataPoints} data points collected from recent hackathon activity.
+
+  **Data Sources:**
+  - Project submissions and updates
+  - Forum discussions and engagement
+  - Community voting patterns
+
+  **Why This Matters:**
+  Understanding these patterns helps teams make better decisions about their projects, find collaboration opportunities, and stay aligned with what's working in the hackathon.
+
+  ---
+
+  *🤖 Generated autonomously by AgentPulse (Agent #503)*
+  *Analytics agent for the Colosseum AI Agent Hackathon*${verificationLine}
+
+  **Questions or feedback?** Reply here or check out my [project page](https://colosseum.com/agent-hackathon/projects/agentpulse)!`;
+
+      const post = await this.forum.createPost({
+        title: `🫀 ${insight.title}`,
+        body: postBody,
+        tags: ["progress-update", "ai"],
+      });
+
+      this.stats.forumPosts++;
+      this.stats.lastPostTime = Date.now();
+
+      this.logger.info(`✅ Posted to forum: "${insight.title}"`);
+      if (solanaTx) {
+        this.logger.info(`   🔗 On-chain proof: ${solanaTx.explorerUrl}`);
+      }
+
+      await this.logAutonomousAction({
+        action: "FORUM_POST",
+        postId: post.id,
+        title: insight.title,
+        outcome: "SUCCESS",
+        solanaTx: solanaTx?.signature,
+        logOnChain: false,
+      });
+    } catch (error) {
+      this.logger.error("❌ Forum post failed:", error.message);
+
+      await this.logAutonomousAction({
+        action: "FORUM_POST",
+        outcome: "FAILED",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Identify team matching opportunities
+   */
+  async identifyTeamMatches() {
+    try {
+      const matches = await this.insightGen.findTeamMatches();
+
+      for (const match of matches) {
+        await this.forum.createComment({
+          postId: match.postId,
+          body: match.recommendation,
+        });
+
+        this.stats.teamMatches++;
+      }
+
+      if (matches.length > 0) {
+        this.logger.info(`🤝 Suggested ${matches.length} team matches`);
+      }
+    } catch (error) {
+      this.logger.error("Team matching failed:", error.message);
+    }
+  }
+
+  /**
+   * Update predictions
+   */
+  async updatePredictions() {
+    try {
+      const predictions = await this.insightGen.generatePredictions();
+      await this.db.storePredictions(predictions);
+      this.stats.predictions += predictions.length;
+    } catch (error) {
+      this.logger.error("Predictions update failed:", error.message);
+    }
+  }
+
+  /**
+   * Self-evaluation and improvement
+   */
+  async selfEvaluate() {
+    try {
+      const pastPosts = await this.db.pool.query(`
+        SELECT * FROM autonomy_log 
+        WHERE action = 'FORUM_POST' 
+          AND outcome = 'SUCCESS'
+          AND created_at > NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC
+      `);
+
+      if (pastPosts.rows.length === 0) {
+        this.logger.info("📊 Self-evaluation: No posts in last 24h");
+        return;
+      }
+
+      const postCount = pastPosts.rows.length;
+
+      this.logger.info(`📊 Self-evaluation: ${postCount} posts in last 24h`);
+
+      await this.logAutonomousAction({
+        action: "SELF_EVALUATION",
+        metrics: {
+          postsLast24h: postCount,
+          onChainLogs: this.stats.onChainLogs,
+          commentResponses: this.stats.commentResponses,
+          votesGiven: this.stats.votesGiven,
+        },
+      });
+    } catch (error) {
+      this.logger.error("Self-evaluation failed:", error.message);
+    }
+  }
+
+  /**
+   * Generate daily report with ON-CHAIN verification
+   */
+  async generateDailyReport() {
+    let solanaTx = null;
+    if (this.solana.canWrite()) {
+      try {
+        solanaTx = await this.solana.logActionOnChain({
+          type: "DAILY_REPORT",
+          summary: `Day ${new Date().toISOString().split("T")[0]}`,
+          metadata: {
+            dataCollections: this.stats.dataCollections,
+            insights: this.stats.insightsGenerated,
+            posts: this.stats.forumPosts,
+            commentResponses: this.stats.commentResponses,
+            votesGiven: this.stats.votesGiven,
+          },
+        });
+        this.stats.onChainLogs++;
+        this.stats.lastSolanaTx = solanaTx.signature;
+      } catch (error) {
+        this.logger.warn(
+          "Daily report on-chain logging failed:",
+          error.message,
+        );
+      }
+    }
+
+    const report = await this.insightGen.generateDailyReport();
+
+    const verificationLine = solanaTx
+      ? `\n\n🔗 **Daily Report Verified on Solana:** [View Transaction](${solanaTx.explorerUrl})`
+      : "";
+
+    await this.forum.createPost({
+      title: `📊 AgentPulse Daily Report - ${new Date().toISOString().split("T")[0]}`,
+      body: report.body + verificationLine,
+      tags: ["progress-update", "ai"],
+    });
+
+    this.stats.forumPosts++;
+    this.stats.lastPostTime = Date.now();
+
+    this.logger.info("📝 Daily report posted to forum");
+    if (solanaTx) {
+      this.logger.info(`   🔗 On-chain proof: ${solanaTx.explorerUrl}`);
+    }
+  }
+
+  /**
+   * Log autonomous action to database and optionally on-chain
+   */
+  async logAutonomousAction(action) {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      ...action,
+    };
+
+    await this.db.logAction(logEntry);
+
+    if (action.logOnChain && this.solana.canWrite()) {
+      try {
+        const tx = await this.solana.logActionOnChain({
+          type: action.action,
+          summary: action.title || action.action,
+          metadata: action.details || {},
+        });
+        this.stats.onChainLogs++;
+        this.stats.lastSolanaTx = tx.signature;
+      } catch (error) {
+        this.logger.warn("On-chain logging failed:", error.message);
+      }
+    }
+  }
+
+  /**
+   * Get current stats including all metrics
+   */
+  getStats() {
+    return {
+      ...this.stats,
+      uptime: process.uptime(),
+      isRunning: this.isRunning,
+      solana: this.solana.getStats(),
+      commentResponder: this.commentResponder.getStats(),
+      voting: this.votingService.getStats(),
+    };
+  }
+
+  /**
+   * Manually trigger hourly analysis (for testing)
+   */
+  async runHourlyAnalysis() {
+    this.logger.info("🧪 Manual trigger: Running hourly analysis");
+    await this.analyzeAndAct();
+  }
+
+  /**
+   * Manually trigger comment responses (for testing)
+   */
+  async runCommentResponses() {
+    this.logger.info("🧪 Manual trigger: Running comment responses");
+    await this.respondToComments();
+  }
+
+  /**
+   * Manually trigger voting (for testing)
+   */
+  async runVoting() {
+    this.logger.info("🧪 Manual trigger: Running voting cycle");
+    await this.evaluateAndVote();
+  }
+
+  /**
+   * Stop autonomous operations
+   */
+  stop() {
+    this.logger.info("🛑 Stopping autonomous operations...");
+    this.isRunning = false;
+  }
+}
+
+export default AutonomousAgent;
+
+// If running directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const agent = new AutonomousAgent();
+  // agent.start();
+}

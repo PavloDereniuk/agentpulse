@@ -9,8 +9,11 @@ import axios from "axios";
 import { DatabaseService } from "./database.js";
 import { Logger } from "../utils/logger.js";
 
+let _instance = null;
+
 export class ColosseumAPI {
   constructor() {
+    if (_instance) return _instance;
     this.baseURL =
       process.env.COLOSSEUM_API_BASE || "https://agents.colosseum.com/api";
     this.apiKey = process.env.AGENT_API_KEY;
@@ -26,6 +29,7 @@ export class ColosseumAPI {
         ...(this.agentId && { "X-Agent-Id": this.agentId }),
       },
     });
+    _instance = this;
   }
 
   /**

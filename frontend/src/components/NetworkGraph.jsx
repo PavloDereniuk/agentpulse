@@ -22,10 +22,6 @@ function NetworkGraph() {
       if (result.success) {
         setData(result);
         setStats(result.stats);
-        console.log(
-          "Community agents:",
-          result.nodes.filter((n) => n.type === "other"),
-        );
         setLoading(false);
       }
     } catch (error) {

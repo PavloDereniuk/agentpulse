@@ -1560,9 +1560,6 @@ app.post("/api/evaluate/live", async (req, res) => {
         `🔍 Searching by name: "${projectName}" - ${project ? `✅ FOUND: ${project.name}` : "❌ NOT FOUND"}`,
       );
 
-      logger.info(`📋 RAW PROJECT DATA:`);
-      logger.info(JSON.stringify(project, null, 2));
-
       // Log similar if not found
       if (!project) {
         const similar = allProjects
@@ -1593,10 +1590,7 @@ app.post("/api/evaluate/live", async (req, res) => {
       });
     }
 
-    logger.info(`🧠 Generating LIVE AI evaluation for: ${project.name}`);
-    logger.info(
-      `📝 100% FRESH API DATA - GitHub=${!!project.github}, Demo=${!!project.demo}, Desc=${(project.description || "").length} chars`,
-    );
+    logger.info(`🧠 Evaluating: ${project.name} (ID: ${project.id})`);
 
     // Calculate objective score
     let objectiveScore = 0;
@@ -1604,36 +1598,29 @@ app.post("/api/evaluate/live", async (req, res) => {
     // GitHub check (+2 points) - API uses 'repoLink'
     if (project.repoLink && project.repoLink.trim()) {
       objectiveScore += 2;
-      logger.info(`✅ GitHub found: +2.0`);
     }
 
     // Demo check (+3 points) - API uses 'technicalDemoLink'
     if (project.technicalDemoLink && project.technicalDemoLink.trim()) {
       objectiveScore += 3;
-      logger.info(`✅ Demo found: +3.0`);
     }
 
     // Description quality (0-2.5 points)
     const descLength = (project.description || "").length;
     if (descLength > 500) {
       objectiveScore += 2.5;
-      logger.info(`✅ Description excellent: +2.5`);
     } else if (descLength > 200) {
       objectiveScore += 1.5;
-      logger.info(`✅ Description good: +1.5`);
     } else if (descLength > 50) {
       objectiveScore += 0.5;
-      logger.info(`⚠️ Description basic: +0.5`);
     }
 
     // Video check (+2.5 points) - API uses 'presentationLink'
     if (project.presentationLink && project.presentationLink.trim()) {
       objectiveScore += 2.5;
-      logger.info(`✅ Video found: +2.5`);
     }
 
-    logger.info(`📊 Objective score: ${objectiveScore}/10`);
-    logger.info("🤖 Calling Claude AI for evaluation...");
+    logger.info(`📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`);
 
     // Get AI evaluation using Claude
     const anthropic = new Anthropic({
@@ -1673,7 +1660,6 @@ Respond ONLY with JSON (no markdown, no backticks):
       });
 
       const aiText = aiResponse.content[0].text;
-      logger.info("🤖 Claude response:", aiText.substring(0, 200));
 
       // Clean and parse JSON
       const cleanedText = aiText.replace(/```json|```/g, "").trim();
@@ -1824,7 +1810,7 @@ app.get("/api/reputation/:agentId", (req, res) => {
 
     res.json(reputation);
   } catch (error) {
-    console.error("Get reputation error:", error);
+    logger.error("Get reputation error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1836,7 +1822,7 @@ app.get("/api/reputation/:agentId/protocols", (req, res) => {
     const activities = mockReputation.getProtocolActivities(parseInt(agentId));
     res.json(activities);
   } catch (error) {
-    console.error("Get protocol activities error:", error);
+    logger.error("Get protocol activities error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1847,7 +1833,7 @@ app.get("/api/protocol-stats", (req, res) => {
     const stats = mockReputation.getProtocolStats();
     res.json(stats);
   } catch (error) {
-    console.error("Get protocol stats error:", error);
+    logger.error("Get protocol stats error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1864,7 +1850,7 @@ app.get("/api/reputation/:agentId/breakdown", (req, res) => {
 
     res.json(breakdown);
   } catch (error) {
-    console.error("Get score breakdown error:", error);
+    logger.error("Get score breakdown error:", error);
     res.status(500).json({ error: error.message });
   }
 });

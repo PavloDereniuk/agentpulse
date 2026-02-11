@@ -51,8 +51,11 @@ export const ACTION_TYPES = {
   LEARNING_UPDATE: 'LEARNING_UPDATE',
 };
 
+let _instance = null;
+
 export class SolanaService {
   constructor() {
+    if (_instance) return _instance;
   this.logger = new Logger('SolanaService');
   this.db = new DatabaseService();
     
@@ -88,6 +91,7 @@ export class SolanaService {
     };
     
     this.logger.info(`🔗 Solana Service initialized (${this.network})`);
+    _instance = this;
   }
 
   // ============================================
@@ -595,16 +599,6 @@ export class SolanaService {
       return null;
     }
   }
-}  // <-- ЦЕ ЗАКРИВАЄ КЛАС SolanaService
-
-// Export singleton instance
-let solanaServiceInstance = null;
-
-export function getSolanaService() {
-  if (!solanaServiceInstance) {
-    solanaServiceInstance = new SolanaService();
-  }
-  return solanaServiceInstance;
 }
 
 export default SolanaService;
