@@ -894,8 +894,7 @@ app.get("/api/analytics/voting", async (req, res) => {
       }, {}),
       topProjects: topProjectsResult.rows.map((row) => ({
         id: row.project_id,
-        name:
-          row.project_name || row.project_slug || `Project #${row.project_id}`,
+        name: row.project_name || row.project_slug || `Project #${row.project_id}`,
         slug: row.project_slug,
         score: parseFloat(row.score).toFixed(1),
         source: row.source,
@@ -974,7 +973,7 @@ app.get("/api/analytics/engagement", async (req, res) => {
         AND details->>'respondedTo' IS NOT NULL
       GROUP BY username
       ORDER BY responses DESC
-      LIMIT 7
+      LIMIT 5
     `);
 
     const commentStats = commentStatsResult.rows[0];
@@ -1227,7 +1226,7 @@ app.get("/api/proofs/db", async (req, res) => {
 
     // Always get ALL proofs for stats
     const allResult = await db.pool.query(
-      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200",
+      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200"
     );
     const allProofs = allResult.rows;
 
@@ -1236,7 +1235,7 @@ app.get("/api/proofs/db", async (req, res) => {
       total: allProofs.length,
       byType: {},
       averageConfidence: 0,
-      withReasoning: allProofs.filter((p) => p.reasoning?.length > 50).length,
+      withReasoning: allProofs.filter(p => p.reasoning?.length > 50).length,
     };
 
     allProofs.forEach((p) => {
@@ -1246,14 +1245,12 @@ app.get("/api/proofs/db", async (req, res) => {
     const withConfidence = allProofs.filter((p) => p.confidence !== null);
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
-        1,
-      );
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(1);
     }
 
     // Filter for display
-    const filtered = type
-      ? allProofs.filter((p) => p.action_type === type)
+    const filtered = type 
+      ? allProofs.filter(p => p.action_type === type) 
       : allProofs;
 
     // Format for frontend
@@ -1629,13 +1626,15 @@ app.post("/api/evaluate/live", async (req, res) => {
     // Calculate objective score
     let objectiveScore = 0;
 
-    // GitHub check (+2 points) - API uses 'repoLink'
-    if (project.repoLink && project.repoLink.trim()) {
+    // GitHub check (+2 points) - API uses different field names
+    const githubLink = project.repoLink || project.github || project.githubUrl || project.data?.repoLink || project.data?.github || '';
+    if (githubLink && githubLink.trim()) {
       objectiveScore += 2;
     }
 
-    // Demo check (+3 points) - API uses 'technicalDemoLink'
-    if (project.technicalDemoLink && project.technicalDemoLink.trim()) {
+    // Demo check (+3 points) - API uses different field names
+    const demoLink = project.technicalDemoLink || project.demo || project.liveAppLink || project.data?.demo || project.data?.technicalDemoLink || project.data?.liveAppLink || '';
+    if (demoLink && demoLink.trim()) {
       objectiveScore += 3;
     }
 
@@ -1649,14 +1648,13 @@ app.post("/api/evaluate/live", async (req, res) => {
       objectiveScore += 0.5;
     }
 
-    // Video check (+2.5 points) - API uses 'presentationLink'
-    if (project.presentationLink && project.presentationLink.trim()) {
+    // Video check (+2.5 points) - API uses different field names
+    const videoLink = project.presentationLink || project.video || project.data?.presentationLink || project.data?.video || '';
+    if (videoLink && videoLink.trim()) {
       objectiveScore += 2.5;
     }
 
-    logger.info(
-      `📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`,
-    );
+    logger.info(`📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`);
 
     // Get AI evaluation using Claude
     const anthropic = new Anthropic({
@@ -1668,8 +1666,8 @@ app.post("/api/evaluate/live", async (req, res) => {
 Project: ${project.name}
 ${project.tagline ? `Tagline: ${project.tagline}` : ""}
 Description: ${project.description || "No description"}
-${project.github ? `GitHub: ${project.github}` : ""}
-${project.demo ? `Demo: ${project.demo}` : ""}
+${githubLink ? `GitHub: ${githubLink}` : ""}
+${demoLink ? `Demo: ${demoLink}` : ""}
 
 Rate these aspects (0-10 each):
 1. Innovation - How novel and creative is the concept?
@@ -1724,7 +1722,7 @@ Respond ONLY with JSON (no markdown, no backticks):
         potential: parseFloat(baseScore.toFixed(1)),
         ecosystemFit: parseFloat((baseScore * 1.0).toFixed(1)),
         overall: parseFloat(baseScore.toFixed(1)),
-        reasoning: `Evaluation based on objective metrics: ${objectiveScore}/10. Project has ${project.github ? "GitHub repository" : "no repository"}, ${project.demo ? "working demo" : "no demo"}, and ${descLength > 200 ? "detailed" : "basic"} description.`,
+        reasoning: `Evaluation based on objective metrics: ${objectiveScore}/10. Project has ${githubLink ? "GitHub repository" : "no repository"}, ${demoLink ? "working demo" : "no demo"}, and ${descLength > 200 ? "detailed" : "basic"} description.`,
       };
     }
 
@@ -1752,10 +1750,10 @@ Respond ONLY with JSON (no markdown, no backticks):
 
 2. OBJECTIVE ANALYSIS (40% weight)
    Score: ${objectiveScore.toFixed(1)}/10
-   ✓ GitHub Repository: ${project.repoLink ? "✅ YES (+2.0)" : "❌ NO (0.0)"}
-   ✓ Working Demo: ${project.technicalDemoLink ? "✅ YES (+3.0)" : "❌ NO (0.0)"}
+   ✓ GitHub Repository: ${githubLink ? "✅ YES (+2.0)" : "❌ NO (0.0)"}
+   ✓ Working Demo: ${demoLink ? "✅ YES (+3.0)" : "❌ NO (0.0)"}
    ✓ Description Quality: ${descLength > 500 ? "Excellent (2.5)" : descLength > 200 ? "Good (1.5)" : descLength > 50 ? "Basic (0.5)" : "Minimal (0.0)"}
-   ✓ Video Demo: ${project.presentationLink ? "✅ YES (+2.5)" : "❌ NO (0.0)"}
+   ✓ Video Demo: ${videoLink ? "✅ YES (+2.5)" : "❌ NO (0.0)"}
 
 3. AI EVALUATION BY CLAUDE (60% weight)
    Overall Score: ${aiEval.overall}/10
@@ -1789,9 +1787,9 @@ Respond ONLY with JSON (no markdown, no backticks):
         effort: aiEval.effort,
         potential: aiEval.potential,
         ecosystemFit: aiEval.ecosystemFit,
-        hasGitHub: project.repoLink ? "✅" : "❌",
-        hasDemo: project.technicalDemoLink ? "✅" : "❌",
-        hasVideo: project.presentationLink ? "✅" : "❌",
+        hasGitHub: githubLink ? "✅" : "❌",
+        hasDemo: demoLink ? "✅" : "❌",
+        hasVideo: videoLink ? "✅" : "❌",
         confidence: `${(confidence * 100).toFixed(0)}%`,
       },
     };
