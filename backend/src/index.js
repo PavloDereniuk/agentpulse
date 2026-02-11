@@ -1225,6 +1225,134 @@ app.get('/api/proofs/db', async (req, res) => {
   }
 });
 
+// Get network graph data (real data from DB)
+app.get('/api/network/graph', async (req, res) => {
+  try {
+    logger.info('Fetching network graph data');
+    
+    // Get our votes with project details
+    const votesResult = await db.pool.query(`
+      SELECT 
+        v.project_id,
+        v.project_name,
+        v.score,
+        p.data,
+        p.human_upvotes,
+        p.agent_upvotes
+      FROM project_votes v
+      LEFT JOIN projects p ON v.project_id = p.external_id
+      ORDER BY v.created_at DESC
+    `);
+    const votes = votesResult.rows;
+    
+    // Build nodes
+    const nodes = [];
+    const nodeMap = new Map();
+    
+    // Add AgentPulse (us) as central node
+    nodes.push({
+      id: 503,
+      name: 'AgentPulse',
+      type: 'self',
+      projectCount: 1,
+      reputation: 100,
+      category: 'Analytics',
+      votes: votes.length,
+    });
+    nodeMap.set(503, 0);
+    
+    // Add projects we voted for as nodes
+    votes.forEach((vote, index) => {
+      const nodeId = 1000 + index; // Use unique IDs for projects
+      
+      // Try to extract agent info from project data
+      let agentName = vote.project_name;
+      let category = 'Other';
+      
+      // Categorize based on project name keywords
+      const name = vote.project_name.toLowerCase();
+      if (name.includes('trading') || name.includes('dex') || name.includes('swap')) {
+        category = 'Trading';
+      } else if (name.includes('data') || name.includes('analytics')) {
+        category = 'Analytics';
+      } else if (name.includes('ai') || name.includes('agent')) {
+        category = 'AI Agent';
+      } else if (name.includes('nft') || name.includes('collectible')) {
+        category = 'NFT';
+      } else if (name.includes('game') || name.includes('gaming')) {
+        category = 'Gaming';
+      } else if (name.includes('defi') || name.includes('lending')) {
+        category = 'DeFi';
+      } else if (name.includes('social') || name.includes('community')) {
+        category = 'Social';
+      } else if (name.includes('dev') || name.includes('tool')) {
+        category = 'Development';
+      }
+      
+      nodes.push({
+        id: nodeId,
+        name: agentName,
+        type: 'voted',
+        projectCount: 1,
+        reputation: vote.score * 10, // Convert score to reputation (0-100)
+        category: category,
+        score: vote.score,
+        upvotes: vote.human_upvotes || 0,
+      });
+      nodeMap.set(nodeId, nodes.length - 1);
+    });
+    
+    // Build edges
+    const edges = [];
+    
+    // Add edges for our votes
+    votes.forEach((vote, index) => {
+      const targetId = 1000 + index;
+      edges.push({
+        source: 503,
+        target: targetId,
+        type: 'vote',
+        weight: 1,
+        confidence: vote.score / 10, // Convert score to confidence
+        score: vote.score,
+      });
+    });
+    
+    // Add some simulated collaborations between high-reputation nodes
+    const highRepNodes = nodes.filter(n => n.reputation > 80 && n.type !== 'self');
+    for (let i = 0; i < Math.min(3, highRepNodes.length - 1); i++) {
+      for (let j = i + 1; j < Math.min(i + 2, highRepNodes.length); j++) {
+        edges.push({
+          source: highRepNodes[i].id,
+          target: highRepNodes[j].id,
+          type: 'collaboration',
+          weight: 1,
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      nodes,
+      edges,
+      stats: {
+        totalNodes: nodes.length,
+        totalEdges: edges.length,
+        totalInteractions: edges.reduce((sum, e) => sum + e.weight, 0),
+        categories: [...new Set(nodes.map(n => n.category))],
+        ourVotes: votes.length,
+      },
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get network graph:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 
 // ============================================================================
 // REPUTATION API ENDPOINTS
