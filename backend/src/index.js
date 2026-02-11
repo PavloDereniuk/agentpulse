@@ -13,7 +13,7 @@ import dotenv from "dotenv";
 import AutonomousAgent from "./agents/autonomousAgent.js";
 import { SolanaService } from "./services/solanaService.js";
 import { Logger } from "./utils/logger.js";
-import mockReputation from './services/mockReputationService.js';
+import mockReputation from "./services/mockReputationService.js";
 import { DatabaseService } from "./services/database.js";
 
 // Load environment variables
@@ -76,25 +76,28 @@ app.get("/health", async (req, res) => {
     try {
       solanaStatus = await solana.getNetworkStatus();
     } catch (solanaError) {
-      logger.warn('Solana unavailable:', solanaError?.message || 'Unknown error');
+      logger.warn(
+        "Solana unavailable:",
+        solanaError?.message || "Unknown error",
+      );
       solanaStatus = { available: false };
     }
 
     res.json({
-      status: 'ok',
-      agent: agent ? agent.getStats() : null,  // ← ДОДАЙ ЦЕ!
-      database: db.pool ? 'connected' : 'disconnected',
+      status: "ok",
+      agent: agent ? agent.getStats() : null, // ← ДОДАЙ ЦЕ!
+      database: db.pool ? "connected" : "disconnected",
       solana: solanaStatus,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error("Health check error:", error?.message || error);
-    
+
     res.json({
-      status: 'degraded',
-      agent: agent ? agent.getStats() : null,  // ← І ТУТ!
-      error: error?.message || 'Unknown error',
-      timestamp: new Date().toISOString()
+      status: "degraded",
+      agent: agent ? agent.getStats() : null, // ← І ТУТ!
+      error: error?.message || "Unknown error",
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -123,21 +126,21 @@ app.get("/api/solana/status", async (req, res) => {
   try {
     let networkStatus = null;
     let walletBalance = null;
-    
+
     // Try to get network status with timeout
     try {
       networkStatus = await solana.getNetworkStatus();
     } catch (err) {
-      logger.warn('Solana network unavailable:', err.message);
-      networkStatus = { available: false, error: 'Network unavailable' };
+      logger.warn("Solana network unavailable:", err.message);
+      networkStatus = { available: false, error: "Network unavailable" };
     }
-    
+
     // Try to get wallet balance
     if (solana.canWrite()) {
       try {
         walletBalance = await solana.getAgentWalletBalance();
       } catch (err) {
-        logger.warn('Wallet balance unavailable:', err.message);
+        logger.warn("Wallet balance unavailable:", err.message);
         walletBalance = null;
       }
     }
@@ -149,12 +152,15 @@ app.get("/api/solana/status", async (req, res) => {
     });
   } catch (error) {
     logger.error("Error getting Solana status:", error?.message || error);
-    
+
     // Return fallback data instead of 500
     res.json({
       network: { available: false },
       wallet: null,
-      stats: solana.getStats() || { network: 'devnet', walletConfigured: false },
+      stats: solana.getStats() || {
+        network: "devnet",
+        walletConfigured: false,
+      },
     });
   }
 });
@@ -290,83 +296,89 @@ app.get("/api/proof", async (req, res) => {
   try {
     // Check cache
     const now = Date.now();
-    if (proofsCache && (now - proofsCacheTime) < PROOFS_CACHE_TTL) {
-      logger.info('Returning cached proofs');
+    if (proofsCache && now - proofsCacheTime < PROOFS_CACHE_TTL) {
+      logger.info("Returning cached proofs");
       return res.json(proofsCache);
     }
-    
+
     const limit = parseInt(req.query.limit) || 20;
-    
+
     // Get from database
-    const result = await db.pool.query(`
+    const result = await db.pool.query(
+      `
       SELECT *
       FROM autonomy_log 
       WHERE details IS NOT NULL
       ORDER BY created_at DESC 
       LIMIT $1
-    `, [limit]);
+    `,
+      [limit],
+    );
 
     // Format as proofs
-// Format as proofs with better summaries
-const proofs = result.rows.map(log => {
-  const details = log.details || {};
-  const solanaTx = details.solanaTx || details.signature || null;
-  const action = details.action || log.action_type || 'ACTION';
-  
-  // Generate better summary based on action type
-  let summary = '';
-  switch(action) {
-    case 'DATA_COLLECTION':
-      const dc = details.details || {};
-      summary = `Collected ${dc.projectsCount || 0} projects, ${dc.postsCount || 0} posts`;
-      break;
-    case 'COMMENT_RESPONSE':
-      summary = `Responded to @${details.respondedTo} on post #${details.postId}`;
-      break;
-    case 'COMMENT_CHECK':
-      const cc = details.details || {};
-      summary = `Checked comments: ${cc.responded || 0}/${cc.processed || 0} responded`;
-      break;
-    case 'AGENT_SPOTLIGHT':
-      summary = details.title || `Agent Spotlight published`;
-      break;
-    case 'SELF_EVALUATION':
-      const se = details.metrics || {};
-      summary = `Self-check: ${se.votesGiven} votes, ${se.onChainLogs} logs, ${se.commentResponses} responses`;
-      break;
-     case 'SELF_IMPROVEMENT':
-    const si = details.improvements || details.changes || {};
-    if (si.strategyVersion) {
-      summary = `Strategy upgraded to v${si.strategyVersion}`;
-    } else {
-      summary = `Self-improvement cycle completed`;
-    }
-      break;
-    case 'POST_DECISION':
-      summary = `Post decision: ${details.decision} (quality: ${details.qualityScore}/10)`;
-      break;
-    case 'VOTING_CYCLE':
-      const vc = details.details || {};
-      summary = `Voting cycle: evaluated ${vc.evaluated || 0}, voted ${vc.voted || 0}`;
-      break;
-    default:
-      summary = `${action} completed successfully`;
-  }
-  
-  return {
-    signature: solanaTx,
-    timestamp: log.created_at,
-    type: action,
-    summary: summary,
-    hash: details.hash || details.actionHash || (solanaTx ? solanaTx.slice(0, 16) : null),
-    explorerUrl: solanaTx 
-      ? `https://solscan.io/tx/${solanaTx}?cluster=${solana.network}`
-      : null,
-    verified: !!solanaTx,
-    slot: details.slot || null,
-    metadata: details,
-  };
-});
+    // Format as proofs with better summaries
+    const proofs = result.rows.map((log) => {
+      const details = log.details || {};
+      const solanaTx = details.solanaTx || details.signature || null;
+      const action = details.action || log.action_type || "ACTION";
+
+      // Generate better summary based on action type
+      let summary = "";
+      switch (action) {
+        case "DATA_COLLECTION":
+          const dc = details.details || {};
+          summary = `Collected ${dc.projectsCount || 0} projects, ${dc.postsCount || 0} posts`;
+          break;
+        case "COMMENT_RESPONSE":
+          summary = `Responded to @${details.respondedTo} on post #${details.postId}`;
+          break;
+        case "COMMENT_CHECK":
+          const cc = details.details || {};
+          summary = `Checked comments: ${cc.responded || 0}/${cc.processed || 0} responded`;
+          break;
+        case "AGENT_SPOTLIGHT":
+          summary = details.title || `Agent Spotlight published`;
+          break;
+        case "SELF_EVALUATION":
+          const se = details.metrics || {};
+          summary = `Self-check: ${se.votesGiven} votes, ${se.onChainLogs} logs, ${se.commentResponses} responses`;
+          break;
+        case "SELF_IMPROVEMENT":
+          const si = details.improvements || details.changes || {};
+          if (si.strategyVersion) {
+            summary = `Strategy upgraded to v${si.strategyVersion}`;
+          } else {
+            summary = `Self-improvement cycle completed`;
+          }
+          break;
+        case "POST_DECISION":
+          summary = `Post decision: ${details.decision} (quality: ${details.qualityScore}/10)`;
+          break;
+        case "VOTING_CYCLE":
+          const vc = details.details || {};
+          summary = `Voting cycle: evaluated ${vc.evaluated || 0}, voted ${vc.voted || 0}`;
+          break;
+        default:
+          summary = `${action} completed successfully`;
+      }
+
+      return {
+        signature: solanaTx,
+        timestamp: log.created_at,
+        type: action,
+        summary: summary,
+        hash:
+          details.hash ||
+          details.actionHash ||
+          (solanaTx ? solanaTx.slice(0, 16) : null),
+        explorerUrl: solanaTx
+          ? `https://solscan.io/tx/${solanaTx}?cluster=${solana.network}`
+          : null,
+        verified: !!solanaTx,
+        slot: details.slot || null,
+        metadata: details,
+      };
+    });
 
     const response = {
       proofs,
@@ -377,11 +389,11 @@ const proofs = result.rows.map(log => {
       timestamp: new Date().toISOString(),
       cached: false,
     };
-    
+
     // Update cache
     proofsCache = { ...response, cached: true };
     proofsCacheTime = now;
-    
+
     res.json(response);
   } catch (error) {
     logger.error("Error getting proofs:", error);
@@ -571,7 +583,6 @@ app.get("/api/comment-responses", async (req, res) => {
 // DATA ENDPOINTS
 // ============================================
 
-
 /**
  * GET /api/autonomy-log
  * Get autonomy log entries
@@ -684,7 +695,7 @@ app.get("/api/analytics/overview", async (req, res) => {
     const totalResult = await db.pool.query(`
       SELECT COUNT(*) as total FROM autonomy_log
     `);
-    
+
     // Actions by type
     const typeResult = await db.pool.query(`
       SELECT 
@@ -696,7 +707,7 @@ app.get("/api/analytics/overview", async (req, res) => {
       ORDER BY count DESC
       LIMIT 5
     `);
-    
+
     // Success rate
     const successResult = await db.pool.query(`
       SELECT 
@@ -705,7 +716,7 @@ app.get("/api/analytics/overview", async (req, res) => {
       FROM autonomy_log
       WHERE details->>'outcome' IS NOT NULL
     `);
-    
+
     // Activity by hour (last 24h)
     const hourlyResult = await db.pool.query(`
       SELECT 
@@ -716,7 +727,7 @@ app.get("/api/analytics/overview", async (req, res) => {
       GROUP BY hour
       ORDER BY hour
     `);
-    
+
     // Daily growth (today vs yesterday)
     const growthResult = await db.pool.query(`
       SELECT 
@@ -724,34 +735,34 @@ app.get("/api/analytics/overview", async (req, res) => {
         COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE - 1) as yesterday
       FROM autonomy_log
     `);
-    
+
     const totalActions = parseInt(totalResult.rows[0]?.total) || 0;
-    const topActionType = typeResult.rows[0]?.action_type || 'N/A';
+    const topActionType = typeResult.rows[0]?.action_type || "N/A";
     const successful = parseInt(successResult.rows[0]?.successful) || 0;
     const totalTracked = parseInt(successResult.rows[0]?.total) || 1;
     const successRate = ((successful / totalTracked) * 100).toFixed(1);
-    
+
     const today = parseInt(growthResult.rows[0]?.today) || 0;
     const yesterday = parseInt(growthResult.rows[0]?.yesterday) || 1;
     const dailyGrowth = (((today - yesterday) / yesterday) * 100).toFixed(1);
-    
+
     // Active hours (top 3 hours by activity)
     const activeHours = hourlyResult.rows
       .sort((a, b) => b.count - a.count)
       .slice(0, 3)
-      .map(row => parseInt(row.hour));
-    
+      .map((row) => parseInt(row.hour));
+
     res.json({
       totalActions,
       successRate: parseFloat(successRate),
       topActionType,
       activeHours,
       dailyGrowth: parseFloat(dailyGrowth),
-      actionDistribution: typeResult.rows.map(row => ({
+      actionDistribution: typeResult.rows.map((row) => ({
         type: row.action_type,
-        count: parseInt(row.count)
+        count: parseInt(row.count),
       })),
-      uptime: agent ? Math.floor(agent.getStats().uptime) : 0
+      uptime: agent ? Math.floor(agent.getStats().uptime) : 0,
     });
   } catch (error) {
     logger.error("Analytics overview error:", error);
@@ -774,7 +785,7 @@ app.get("/api/analytics/voting", async (req, res) => {
         MIN(score) as min_score
       FROM project_evaluations
     `);
-    
+
     // Score distribution
     const distributionResult = await db.pool.query(`
       SELECT 
@@ -785,7 +796,7 @@ app.get("/api/analytics/voting", async (req, res) => {
       GROUP BY score_bucket
       ORDER BY score_bucket
     `);
-    
+
     // Top projects by score
     const topProjectsResult = await db.pool.query(`
       SELECT 
@@ -802,7 +813,7 @@ app.get("/api/analytics/voting", async (req, res) => {
       ORDER BY score DESC
       LIMIT 10
     `);
-    
+
     // Recent voting activity (last 7 days)
     const activityResult = await db.pool.query(`
       SELECT 
@@ -814,10 +825,10 @@ app.get("/api/analytics/voting", async (req, res) => {
       GROUP BY date
       ORDER BY date
     `);
-    
+
     const stats = statsResult.rows[0];
     const totalEvaluations = parseInt(stats?.total_evaluations) || 0;
-    
+
     res.json({
       projectsEvaluated: totalEvaluations,
       votesGiven: totalEvaluations,
@@ -828,7 +839,7 @@ app.get("/api/analytics/voting", async (req, res) => {
         acc[row.score_bucket] = parseInt(row.count);
         return acc;
       }, {}),
-      topProjects: topProjectsResult.rows.map(row => ({
+      topProjects: topProjectsResult.rows.map((row) => ({
         id: row.project_id,
         score: parseFloat(row.score).toFixed(1),
         breakdown: {
@@ -836,16 +847,16 @@ app.get("/api/analytics/voting", async (req, res) => {
           innovation: row.innovation,
           technicalQuality: row.technical_quality,
           ecosystemValue: row.ecosystem_value,
-          engagement: row.engagement
+          engagement: row.engagement,
         },
         reasoning: row.reasoning,
-        votedAt: row.created_at
+        votedAt: row.created_at,
       })),
-      recentActivity: activityResult.rows.map(row => ({
+      recentActivity: activityResult.rows.map((row) => ({
         date: row.date,
         votes: parseInt(row.votes),
-        avgScore: parseFloat(row.avg_score).toFixed(1)
-      }))
+        avgScore: parseFloat(row.avg_score).toFixed(1),
+      })),
     });
   } catch (error) {
     logger.error("Analytics voting error:", error);
@@ -867,7 +878,7 @@ app.get("/api/analytics/engagement", async (req, res) => {
       FROM autonomy_log
       WHERE details->>'action' = 'COMMENT_RESPONSE'
     `);
-    
+
     // Comments by hour (last 7 days)
     const hourlyResult = await db.pool.query(`
       SELECT 
@@ -879,7 +890,7 @@ app.get("/api/analytics/engagement", async (req, res) => {
       GROUP BY hour
       ORDER BY hour
     `);
-    
+
     // Daily engagement (last 7 days)
     const dailyResult = await db.pool.query(`
       SELECT 
@@ -892,7 +903,7 @@ app.get("/api/analytics/engagement", async (req, res) => {
       GROUP BY date
       ORDER BY date
     `);
-    
+
     // Response time analysis (for comments with timestamps)
     const responseTimeResult = await db.pool.query(`
       SELECT 
@@ -902,7 +913,7 @@ app.get("/api/analytics/engagement", async (req, res) => {
         AND details->>'commentCreatedAt' IS NOT NULL
         AND created_at > NOW() - INTERVAL '7 days'
     `);
-    
+
     // Top engagement targets (most responded to users)
     const topTargetsResult = await db.pool.query(`
       SELECT 
@@ -915,28 +926,31 @@ app.get("/api/analytics/engagement", async (req, res) => {
       ORDER BY responses DESC
       LIMIT 5
     `);
-    
+
     const commentStats = commentStatsResult.rows[0];
-    const avgResponseTime = parseFloat(responseTimeResult.rows[0]?.avg_minutes || 0);
-    
+    const avgResponseTime = parseFloat(
+      responseTimeResult.rows[0]?.avg_minutes || 0,
+    );
+
     res.json({
       totalResponses: parseInt(commentStats?.total_responses) || 0,
       uniquePosts: parseInt(commentStats?.unique_posts) || 0,
-      avgResponseTime: avgResponseTime > 0 ? `${avgResponseTime.toFixed(1)} min` : 'N/A',
-      commentsByHour: hourlyResult.rows.map(row => ({
+      avgResponseTime:
+        avgResponseTime > 0 ? `${avgResponseTime.toFixed(1)} min` : "N/A",
+      commentsByHour: hourlyResult.rows.map((row) => ({
         hour: parseInt(row.hour),
-        count: parseInt(row.count)
+        count: parseInt(row.count),
       })),
-      dailyEngagement: dailyResult.rows.map(row => ({
+      dailyEngagement: dailyResult.rows.map((row) => ({
         date: row.date,
         responses: parseInt(row.responses),
         posts: parseInt(row.posts),
-        votes: parseInt(row.votes)
+        votes: parseInt(row.votes),
       })),
-      topTargets: topTargetsResult.rows.map(row => ({
+      topTargets: topTargetsResult.rows.map((row) => ({
         username: row.username,
-        responses: parseInt(row.responses)
-      }))
+        responses: parseInt(row.responses),
+      })),
     });
   } catch (error) {
     logger.error("Analytics engagement error:", error);
@@ -950,18 +964,18 @@ app.get("/api/analytics/engagement", async (req, res) => {
  */
 app.get("/api/analytics/timeline", async (req, res) => {
   try {
-    const { period = '7d' } = req.query;
-    
+    const { period = "7d" } = req.query;
+
     // Determine interval based on period
-    let interval = '7 days';
-    let groupBy = 'DATE(created_at)';
-    if (period === '24h') {
-      interval = '24 hours';
+    let interval = "7 days";
+    let groupBy = "DATE(created_at)";
+    if (period === "24h") {
+      interval = "24 hours";
       groupBy = "DATE_TRUNC('hour', created_at)";
-    } else if (period === '30d') {
-      interval = '30 days';
+    } else if (period === "30d") {
+      interval = "30 days";
     }
-    
+
     // Hourly activity (last 24h)
     const hourlyResult = await db.pool.query(`
       SELECT 
@@ -976,7 +990,7 @@ app.get("/api/analytics/timeline", async (req, res) => {
       GROUP BY timestamp
       ORDER BY timestamp
     `);
-    
+
     // Daily activity (last 7 days)
     const dailyResult = await db.pool.query(`
       SELECT 
@@ -991,36 +1005,34 @@ app.get("/api/analytics/timeline", async (req, res) => {
       GROUP BY date
       ORDER BY date
     `);
-    
+
     res.json({
-      hourly: hourlyResult.rows.map(row => ({
+      hourly: hourlyResult.rows.map((row) => ({
         timestamp: row.timestamp,
         total: parseInt(row.total),
         breakdown: {
           dataCollection: parseInt(row.data_collection),
           commentResponses: parseInt(row.comment_responses),
           commentChecks: parseInt(row.comment_checks),
-          voting: parseInt(row.voting)
-        }
+          voting: parseInt(row.voting),
+        },
       })),
-      daily: dailyResult.rows.map(row => ({
+      daily: dailyResult.rows.map((row) => ({
         date: row.date,
         total: parseInt(row.total),
         breakdown: {
           dataCollection: parseInt(row.data_collection),
           commentResponses: parseInt(row.comment_responses),
           spotlights: parseInt(row.spotlights),
-          digests: parseInt(row.digests)
-        }
-      }))
+          digests: parseInt(row.digests),
+        },
+      })),
     });
   } catch (error) {
     logger.error("Analytics timeline error:", error);
     res.status(500).json({ error: error.message });
   }
 });
-
-
 
 app.get("/api/evolution", async (req, res) => {
   if (!agent) return res.status(503).json({ error: "Agent not running" });
@@ -1049,21 +1061,21 @@ app.post("/api/trigger-self-improve", async (req, res) => {
 });
 
 // Get on-chain proofs with full reasoning
-app.get('/api/proofs', async (req, res) => {
+app.get("/api/proofs", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
     const type = req.query.type; // Optional filter by action type
-    
-    logger.info(`Fetching proofs (limit: ${limit}, type: ${type || 'all'})`);
-    
+
+    logger.info(`Fetching proofs (limit: ${limit}, type: ${type || "all"})`);
+
     // Get on-chain proofs
     const proofs = await solana.getOnChainProofs(limit);
-    
+
     // Filter by type if requested
-    const filteredProofs = type 
-      ? proofs.filter(p => p.type === type)
+    const filteredProofs = type
+      ? proofs.filter((p) => p.type === type)
       : proofs;
-    
+
     // Get reasoning from database for each proof
     const proofsWithReasoning = await Promise.all(
       filteredProofs.map(async (proof) => {
@@ -1076,7 +1088,10 @@ app.get('/api/proofs', async (req, res) => {
             factors: reasoning?.factors || {},
           };
         } catch (error) {
-          logger.warn(`Failed to get reasoning for ${proof.hash}:`, error.message);
+          logger.warn(
+            `Failed to get reasoning for ${proof.hash}:`,
+            error.message,
+          );
           return {
             ...proof,
             reasoning: null,
@@ -1084,9 +1099,9 @@ app.get('/api/proofs', async (req, res) => {
             factors: {},
           };
         }
-      })
+      }),
     );
-    
+
     // Calculate stats
     const stats = {
       total: proofsWithReasoning.length,
@@ -1094,88 +1109,93 @@ app.get('/api/proofs', async (req, res) => {
       averageConfidence: 0,
       withReasoning: 0,
     };
-    
+
     // Count by type
-    proofsWithReasoning.forEach(p => {
+    proofsWithReasoning.forEach((p) => {
       stats.byType[p.type] = (stats.byType[p.type] || 0) + 1;
       if (p.reasoning) stats.withReasoning++;
     });
-    
+
     // Calculate average confidence
-    const withConfidence = proofsWithReasoning.filter(p => p.confidence !== null);
+    const withConfidence = proofsWithReasoning.filter(
+      (p) => p.confidence !== null,
+    );
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = (sum / withConfidence.length * 100).toFixed(1);
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
+        1,
+      );
     }
-    
+
     res.json({
       success: true,
       stats,
       proofs: proofsWithReasoning,
     });
-    
   } catch (error) {
-    logger.error('Failed to get proofs:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    logger.error("Failed to get proofs:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });
 
 // Get stats about action types
-app.get('/api/proofs/stats', async (req, res) => {
+app.get("/api/proofs/stats", async (req, res) => {
   try {
     const proofs = await solanaService.getOnChainProofs(500);
-    
+
     const stats = {
       total: proofs.length,
       byType: {},
       timeline: {},
     };
-    
-    proofs.forEach(p => {
+
+    proofs.forEach((p) => {
       // Count by type
       stats.byType[p.type] = (stats.byType[p.type] || 0) + 1;
-      
+
       // Count by date
       if (p.timestamp) {
-        const date = p.timestamp.split('T')[0];
+        const date = p.timestamp.split("T")[0];
         stats.timeline[date] = (stats.timeline[date] || 0) + 1;
       }
     });
-    
+
     res.json({ success: true, stats });
   } catch (error) {
-    logger.error('Failed to get proof stats:', error);
+    logger.error("Failed to get proof stats:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // Get reasoning proofs directly from database (faster, doesn't need blockchain)
-app.get('/api/proofs/db', async (req, res) => {
+app.get("/api/proofs/db", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
     const type = req.query.type;
-    
-    logger.info(`Fetching proofs from DB (limit: ${limit}, type: ${type || 'all'})`);
-    
+
+    logger.info(
+      `Fetching proofs from DB (limit: ${limit}, type: ${type || "all"})`,
+    );
+
     // Build query
-    let query = 'SELECT * FROM action_reasoning';
+    let query = "SELECT * FROM action_reasoning";
     const params = [];
-    
+
     if (type) {
-      query += ' WHERE action_type = $1';
+      query += " WHERE action_type = $1";
       params.push(type);
     }
-    
-    query += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1);
+
+    query += " ORDER BY created_at DESC LIMIT $" + (params.length + 1);
     params.push(limit);
-    
+
     // Get from database
     const result = await db.pool.query(query, params);
     const proofs = result.rows;
-    
+
     // Calculate stats
     const stats = {
       total: proofs.length,
@@ -1183,21 +1203,23 @@ app.get('/api/proofs/db', async (req, res) => {
       averageConfidence: 0,
       withReasoning: proofs.length,
     };
-    
+
     // Count by type
-    proofs.forEach(p => {
+    proofs.forEach((p) => {
       stats.byType[p.action_type] = (stats.byType[p.action_type] || 0) + 1;
     });
-    
+
     // Calculate average confidence
-    const withConfidence = proofs.filter(p => p.confidence !== null);
+    const withConfidence = proofs.filter((p) => p.confidence !== null);
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = (sum / withConfidence.length * 100).toFixed(1);
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
+        1,
+      );
     }
-    
+
     // Format for frontend
-    const formattedProofs = proofs.map(p => ({
+    const formattedProofs = proofs.map((p) => ({
       type: p.action_type,
       reasoning: p.reasoning,
       confidence: p.confidence,
@@ -1205,31 +1227,30 @@ app.get('/api/proofs/db', async (req, res) => {
       timestamp: p.created_at,
       hash: p.action_hash,
       // Mock explorer URL since we don't have on-chain signature from DB
-      explorerUrl: '#',
+      explorerUrl: "#",
       verified: true,
     }));
-    
+
     res.json({
       success: true,
       stats,
       proofs: formattedProofs,
-      source: 'database',
+      source: "database",
     });
-    
   } catch (error) {
-    logger.error('Failed to get proofs from DB:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    logger.error("Failed to get proofs from DB:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });
 
 // Get network graph data (real data from DB)
-app.get('/api/network/graph', async (req, res) => {
+app.get("/api/network/graph", async (req, res) => {
   try {
-    logger.info('Fetching network graph data');
-    
+    logger.info("Fetching network graph data");
+
     // Get our votes with project details
     const votesResult = await db.pool.query(`
       SELECT 
@@ -1244,55 +1265,59 @@ app.get('/api/network/graph', async (req, res) => {
       ORDER BY v.created_at DESC
     `);
     const votes = votesResult.rows;
-    
+
     // Build nodes
     const nodes = [];
     const nodeMap = new Map();
-    
+
     // Add AgentPulse (us) as central node
     nodes.push({
       id: 503,
-      name: 'AgentPulse',
-      type: 'self',
+      name: "AgentPulse",
+      type: "self",
       projectCount: 1,
       reputation: 100,
-      category: 'Analytics',
+      category: "Analytics",
       votes: votes.length,
     });
     nodeMap.set(503, 0);
-    
+
     // Add projects we voted for as nodes
     votes.forEach((vote, index) => {
       const nodeId = 1000 + index; // Use unique IDs for projects
-      
+
       // Try to extract agent info from project data
       let agentName = vote.project_name;
-      let category = 'Other';
-      
+      let category = "Other";
+
       // Categorize based on project name keywords
       const name = vote.project_name.toLowerCase();
-      if (name.includes('trading') || name.includes('dex') || name.includes('swap')) {
-        category = 'Trading';
-      } else if (name.includes('data') || name.includes('analytics')) {
-        category = 'Analytics';
-      } else if (name.includes('ai') || name.includes('agent')) {
-        category = 'AI Agent';
-      } else if (name.includes('nft') || name.includes('collectible')) {
-        category = 'NFT';
-      } else if (name.includes('game') || name.includes('gaming')) {
-        category = 'Gaming';
-      } else if (name.includes('defi') || name.includes('lending')) {
-        category = 'DeFi';
-      } else if (name.includes('social') || name.includes('community')) {
-        category = 'Social';
-      } else if (name.includes('dev') || name.includes('tool')) {
-        category = 'Development';
+      if (
+        name.includes("trading") ||
+        name.includes("dex") ||
+        name.includes("swap")
+      ) {
+        category = "Trading";
+      } else if (name.includes("data") || name.includes("analytics")) {
+        category = "Analytics";
+      } else if (name.includes("ai") || name.includes("agent")) {
+        category = "AI Agent";
+      } else if (name.includes("nft") || name.includes("collectible")) {
+        category = "NFT";
+      } else if (name.includes("game") || name.includes("gaming")) {
+        category = "Gaming";
+      } else if (name.includes("defi") || name.includes("lending")) {
+        category = "DeFi";
+      } else if (name.includes("social") || name.includes("community")) {
+        category = "Social";
+      } else if (name.includes("dev") || name.includes("tool")) {
+        category = "Development";
       }
-      
+
       nodes.push({
         id: nodeId,
         name: agentName,
-        type: 'voted',
+        type: "voted",
         projectCount: 1,
         reputation: vote.score * 10, // Convert score to reputation (0-100)
         category: category,
@@ -1301,36 +1326,38 @@ app.get('/api/network/graph', async (req, res) => {
       });
       nodeMap.set(nodeId, nodes.length - 1);
     });
-    
+
     // Build edges
     const edges = [];
-    
+
     // Add edges for our votes
     votes.forEach((vote, index) => {
       const targetId = 1000 + index;
       edges.push({
         source: 503,
         target: targetId,
-        type: 'vote',
+        type: "vote",
         weight: 1,
         confidence: vote.score / 10, // Convert score to confidence
         score: vote.score,
       });
     });
-    
+
     // Add some simulated collaborations between high-reputation nodes
-    const highRepNodes = nodes.filter(n => n.reputation > 80 && n.type !== 'self');
+    const highRepNodes = nodes.filter(
+      (n) => n.reputation > 80 && n.type !== "self",
+    );
     for (let i = 0; i < Math.min(3, highRepNodes.length - 1); i++) {
       for (let j = i + 1; j < Math.min(i + 2, highRepNodes.length); j++) {
         edges.push({
           source: highRepNodes[i].id,
           target: highRepNodes[j].id,
-          type: 'collaboration',
+          type: "collaboration",
           weight: 1,
         });
       }
     }
-    
+
     res.json({
       success: true,
       nodes,
@@ -1339,78 +1366,209 @@ app.get('/api/network/graph', async (req, res) => {
         totalNodes: nodes.length,
         totalEdges: edges.length,
         totalInteractions: edges.reduce((sum, e) => sum + e.weight, 0),
-        categories: [...new Set(nodes.map(n => n.category))],
+        categories: [...new Set(nodes.map((n) => n.category))],
         ourVotes: votes.length,
       },
     });
-    
   } catch (error) {
-    logger.error('Failed to get network graph:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    logger.error("Failed to get network graph:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });
 
+// Get learning/evolution data
+app.get("/api/learning/stats", async (req, res) => {
+  try {
+    logger.info("Fetching learning stats");
+
+    // Get reasoning history with confidence over time
+    const confidenceHistory = await db.pool.query(`
+      SELECT 
+        DATE_TRUNC('hour', created_at) as time_bucket,
+        action_type,
+        AVG(confidence) as avg_confidence,
+        COUNT(*) as action_count
+      FROM action_reasoning
+      GROUP BY time_bucket, action_type
+      ORDER BY time_bucket ASC
+    `);
+
+    // Get confidence distribution
+    const confidenceDistribution = await db.pool.query(`
+      SELECT 
+        CASE 
+          WHEN confidence >= 0.9 THEN '90-100%'
+          WHEN confidence >= 0.8 THEN '80-89%'
+          WHEN confidence >= 0.7 THEN '70-79%'
+          ELSE '60-69%'
+        END as confidence_range,
+        COUNT(*) as count
+      FROM action_reasoning
+      GROUP BY confidence_range
+      ORDER BY confidence_range DESC
+    `);
+
+    // Get voting accuracy (projects we voted for vs their success)
+    const votingAccuracy = await db.pool.query(`
+      SELECT 
+        pv.project_name,
+        pv.score as our_score,
+        p.human_upvotes + p.agent_upvotes as total_upvotes,
+        ar.confidence
+      FROM project_votes pv
+      LEFT JOIN projects p ON pv.project_id = p.external_id
+      LEFT JOIN action_reasoning ar ON ar.action_hash LIKE '%' || pv.project_id || '%'
+      WHERE ar.action_type = 'VOTE_CAST'
+      ORDER BY pv.created_at DESC
+      LIMIT 50
+    `);
+
+    // Calculate improvement metrics
+    const firstWeek = await db.pool.query(`
+      SELECT AVG(confidence) as avg_confidence
+      FROM action_reasoning
+      WHERE created_at < NOW() - INTERVAL '3 days'
+    `);
+
+    const lastWeek = await db.pool.query(`
+      SELECT AVG(confidence) as avg_confidence
+      FROM action_reasoning
+      WHERE created_at >= NOW() - INTERVAL '3 days'
+    `);
+
+    const improvementRate = firstWeek.rows[0]?.avg_confidence
+      ? (
+          ((lastWeek.rows[0]?.avg_confidence -
+            firstWeek.rows[0]?.avg_confidence) /
+            firstWeek.rows[0]?.avg_confidence) *
+          100
+        ).toFixed(1)
+      : 0;
+
+    res.json({
+      success: true,
+      confidenceOverTime: confidenceHistory.rows,
+      confidenceDistribution: confidenceDistribution.rows,
+      votingAccuracy: votingAccuracy.rows,
+      metrics: {
+        totalActions: confidenceHistory.rows.reduce(
+          (sum, r) => sum + parseInt(r.action_count),
+          0,
+        ),
+        averageConfidence: (
+          (confidenceHistory.rows.reduce(
+            (sum, r) => sum + parseFloat(r.avg_confidence),
+            0,
+          ) /
+            confidenceHistory.rows.length) *
+          100
+        ).toFixed(1),
+        improvementRate: improvementRate,
+        highConfidenceRate:
+          confidenceDistribution.rows.find(
+            (r) => r.confidence_range === "90-100%",
+          )?.count || 0,
+      },
+    });
+  } catch (error) {
+    logger.error("Failed to get learning stats:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Get strategy evolution
+app.get("/api/learning/evolution", async (req, res) => {
+  try {
+    // Get how voting strategy evolved
+    const strategyEvolution = await db.pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as votes_cast,
+        AVG((factors->>'finalScore')::float) as avg_score,
+        COUNT(*) FILTER (WHERE (factors->>'isPriority')::boolean = true) as priority_votes
+      FROM action_reasoning
+      WHERE action_type = 'VOTE_CAST'
+      AND factors IS NOT NULL
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+
+    res.json({
+      success: true,
+      evolution: strategyEvolution.rows,
+    });
+  } catch (error) {
+    logger.error("Failed to get evolution data:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
 
 // ============================================================================
 // REPUTATION API ENDPOINTS
 // ============================================================================
 
 // Get agent reputation
-app.get('/api/reputation/:agentId', (req, res) => {
+app.get("/api/reputation/:agentId", (req, res) => {
   try {
     const { agentId } = req.params;
     const reputation = mockReputation.getReputation(parseInt(agentId));
-    
+
     if (!reputation) {
-      return res.status(404).json({ error: 'Reputation not found' });
+      return res.status(404).json({ error: "Reputation not found" });
     }
-    
+
     res.json(reputation);
   } catch (error) {
-    console.error('Get reputation error:', error);
+    console.error("Get reputation error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get protocol activities
-app.get('/api/reputation/:agentId/protocols', (req, res) => {
+app.get("/api/reputation/:agentId/protocols", (req, res) => {
   try {
     const { agentId } = req.params;
     const activities = mockReputation.getProtocolActivities(parseInt(agentId));
     res.json(activities);
   } catch (error) {
-    console.error('Get protocol activities error:', error);
+    console.error("Get protocol activities error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get protocol ecosystem stats
-app.get('/api/protocol-stats', (req, res) => {
+app.get("/api/protocol-stats", (req, res) => {
   try {
     const stats = mockReputation.getProtocolStats();
     res.json(stats);
   } catch (error) {
-    console.error('Get protocol stats error:', error);
+    console.error("Get protocol stats error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get score breakdown
-app.get('/api/reputation/:agentId/breakdown', (req, res) => {
+app.get("/api/reputation/:agentId/breakdown", (req, res) => {
   try {
     const { agentId } = req.params;
     const breakdown = mockReputation.getScoreBreakdown(parseInt(agentId));
-    
+
     if (!breakdown) {
-      return res.status(404).json({ error: 'Reputation not found' });
+      return res.status(404).json({ error: "Reputation not found" });
     }
-    
+
     res.json(breakdown);
   } catch (error) {
-    console.error('Get score breakdown error:', error);
+    console.error("Get score breakdown error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1425,54 +1583,55 @@ app.get('/api/reputation/:agentId/breakdown', (req, res) => {
  */
 app.get("/skill.json", (req, res) => {
   const skillData = {
-    "name": "AgentPulse Analytics API",
-    "description": "The First Autonomous Analytics Agent for AI Agent Communities. Provides real-time insights, project rankings, trends, and ecosystem health data for the Colosseum AI Agent Hackathon.",
-    "version": "1.0.0",
-    "agent": {
-      "name": "AgentPulse",
-      "id": "503",
-      "wallet": "5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2",
-      "twitter": "@PDereniuk"
+    name: "AgentPulse Analytics API",
+    description:
+      "The First Autonomous Analytics Agent for AI Agent Communities. Provides real-time insights, project rankings, trends, and ecosystem health data for the Colosseum AI Agent Hackathon.",
+    version: "1.0.0",
+    agent: {
+      name: "AgentPulse",
+      id: "503",
+      wallet: "5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2",
+      twitter: "@PDereniuk",
     },
-    "api": {
-      "base_url": "https://agentpulse-production-8e01.up.railway.app",
-      "documentation": "https://agentpulse.vercel.app",
-      "rate_limit": "100 requests per minute",
-      "authentication": "None (public API)"
+    api: {
+      base_url: "https://agentpulse-production-8e01.up.railway.app",
+      documentation: "https://agentpulse.vercel.app",
+      rate_limit: "100 requests per minute",
+      authentication: "None (public API)",
     },
-    "endpoints": [
+    endpoints: [
       {
-        "path": "/api/leaderboard",
-        "method": "GET",
-        "description": "Project rankings with AgentPulse Score"
+        path: "/api/leaderboard",
+        method: "GET",
+        description: "Project rankings with AgentPulse Score",
       },
       {
-        "path": "/api/leaderboard/trends",
-        "method": "GET",
-        "description": "Rising stars and trending projects"
+        path: "/api/leaderboard/trends",
+        method: "GET",
+        description: "Rising stars and trending projects",
       },
       {
-        "path": "/api/agent-insights",
-        "method": "POST",
-        "description": "AI-generated project analysis",
-        "body": { "projectId": "number", "focusArea": "string (optional)" }
+        path: "/api/agent-insights",
+        method: "POST",
+        description: "AI-generated project analysis",
+        body: { projectId: "number", focusArea: "string (optional)" },
       },
       {
-        "path": "/api/ecosystem-stats",
-        "method": "GET",
-        "description": "Overall hackathon statistics"
+        path: "/api/ecosystem-stats",
+        method: "GET",
+        description: "Overall hackathon statistics",
       },
       {
-        "path": "/api/forum-activity",
-        "method": "GET",
-        "description": "Recent forum activity"
+        path: "/api/forum-activity",
+        method: "GET",
+        description: "Recent forum activity",
       },
       {
-        "path": "/api/proof",
-        "method": "GET",
-        "description": "On-chain autonomy proofs"
-      }
-    ]
+        path: "/api/proof",
+        method: "GET",
+        description: "On-chain autonomy proofs",
+      },
+    ],
   };
   res.json(skillData);
 });
@@ -1483,30 +1642,32 @@ app.get("/skill.json", (req, res) => {
  */
 app.post("/api/agent-insights", async (req, res) => {
   try {
-    const { projectId, focusArea = 'overall' } = req.body;
+    const { projectId, focusArea = "overall" } = req.body;
 
     if (!projectId) {
-      return res.status(400).json({ error: 'projectId is required' });
+      return res.status(400).json({ error: "projectId is required" });
     }
 
     // Get project data from Colosseum API
-    const api = new (await import('./services/colosseumAPI.js')).ColosseumAPI();
+    const api = new (await import("./services/colosseumAPI.js")).ColosseumAPI();
     const projects = await api.getProjects({ limit: 500 });
-    const project = projects.find(p => p.id === parseInt(projectId));
+    const project = projects.find((p) => p.id === parseInt(projectId));
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+      return res.status(404).json({ error: "Project not found" });
     }
 
     // Generate insights using InsightGenerator
-    const insightGen = new (await import('./services/insightGenerator.js')).InsightGenerator();
+    const insightGen = new (
+      await import("./services/insightGenerator.js")
+    ).InsightGenerator();
     const prompt = `Analyze this AI agent project from the Colosseum Hackathon:
 
 Project: ${project.name}
-Description: ${project.description || 'No description'}
+Description: ${project.description || "No description"}
 Votes: ${project.voteCount || 0}
-Has Demo: ${project.presentationLink ? 'Yes' : 'No'}
-Has GitHub: ${project.repoLink ? 'Yes' : 'No'}
+Has Demo: ${project.presentationLink ? "Yes" : "No"}
+Has GitHub: ${project.repoLink ? "Yes" : "No"}
 Focus: ${focusArea}
 
 Provide a ${focusArea} analysis including:
@@ -1527,8 +1688,8 @@ Format as JSON: {score, strengths: [], concerns: [], analysis}`;
       parsedInsight = {
         score: 7,
         analysis: insight.content,
-        strengths: ['Project exists'],
-        concerns: ['Analysis format issue']
+        strengths: ["Project exists"],
+        concerns: ["Analysis format issue"],
       };
     }
 
@@ -1536,11 +1697,10 @@ Format as JSON: {score, strengths: [], concerns: [], analysis}`;
       projectId: project.id,
       projectName: project.name,
       ...parsedInsight,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
     });
-
   } catch (error) {
-    logger.error('Agent insights error:', error);
+    logger.error("Agent insights error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1551,73 +1711,94 @@ Format as JSON: {score, strengths: [], concerns: [], analysis}`;
  */
 app.get("/api/ecosystem-stats", async (req, res) => {
   try {
-    const api = new (await import('./services/colosseumAPI.js')).ColosseumAPI();
+    const api = new (await import("./services/colosseumAPI.js")).ColosseumAPI();
     const projects = await api.getProjects({ limit: 500 });
     const forumPosts = await api.getForumPosts({ limit: 200 });
 
     const stats = {
       totalProjects: projects.length,
       totalVotes: projects.reduce((sum, p) => sum + (p.voteCount || 0), 0),
-      avgVotesPerProject: projects.length > 0
-        ? (projects.reduce((sum, p) => sum + (p.voteCount || 0), 0) / projects.length).toFixed(2)
-        : 0,
-      projectsWithDemo: projects.filter(p => p.presentationLink).length,
-      projectsWithRepo: projects.filter(p => p.repoLink).length,
-      projectsWithDescription: projects.filter(p => p.description && p.description.length > 100).length,
+      avgVotesPerProject:
+        projects.length > 0
+          ? (
+              projects.reduce((sum, p) => sum + (p.voteCount || 0), 0) /
+              projects.length
+            ).toFixed(2)
+          : 0,
+      projectsWithDemo: projects.filter((p) => p.presentationLink).length,
+      projectsWithRepo: projects.filter((p) => p.repoLink).length,
+      projectsWithDescription: projects.filter(
+        (p) => p.description && p.description.length > 100,
+      ).length,
 
       // Calculate category distribution (based on keywords in descriptions)
       topCategories: (() => {
         const categories = {
-          'Trading/DeFi': 0,
-          'Analytics/Data': 0,
-          'Infrastructure': 0,
-          'Gaming': 0,
-          'Social': 0,
-          'Security': 0,
-          'AI/ML': 0,
-          'Other': 0
+          "Trading/DeFi": 0,
+          "Analytics/Data": 0,
+          Infrastructure: 0,
+          Gaming: 0,
+          Social: 0,
+          Security: 0,
+          "AI/ML": 0,
+          Other: 0,
         };
 
-        projects.forEach(p => {
-          const desc = (p.description || '').toLowerCase();
-          if (/trading|defi|swap|liquidity|yield|perp/.test(desc)) categories['Trading/DeFi']++;
-          else if (/analytics|dashboard|data|metrics|tracking/.test(desc)) categories['Analytics/Data']++;
-          else if (/infrastructure|sdk|api|framework|protocol/.test(desc)) categories['Infrastructure']++;
-          else if (/game|gaming|minecraft|nft/.test(desc)) categories['Gaming']++;
-          else if (/social|community|forum|chat/.test(desc)) categories['Social']++;
-          else if (/security|audit|safety|verify/.test(desc)) categories['Security']++;
-          else if (/ai|ml|llm|gpt|claude|model/.test(desc)) categories['AI/ML']++;
-          else categories['Other']++;
+        projects.forEach((p) => {
+          const desc = (p.description || "").toLowerCase();
+          if (/trading|defi|swap|liquidity|yield|perp/.test(desc))
+            categories["Trading/DeFi"]++;
+          else if (/analytics|dashboard|data|metrics|tracking/.test(desc))
+            categories["Analytics/Data"]++;
+          else if (/infrastructure|sdk|api|framework|protocol/.test(desc))
+            categories["Infrastructure"]++;
+          else if (/game|gaming|minecraft|nft/.test(desc))
+            categories["Gaming"]++;
+          else if (/social|community|forum|chat/.test(desc))
+            categories["Social"]++;
+          else if (/security|audit|safety|verify/.test(desc))
+            categories["Security"]++;
+          else if (/ai|ml|llm|gpt|claude|model/.test(desc))
+            categories["AI/ML"]++;
+          else categories["Other"]++;
         });
 
         return Object.entries(categories)
           .map(([category, count]) => ({ category, count }))
-          .filter(c => c.count > 0)
+          .filter((c) => c.count > 0)
           .sort((a, b) => b.count - a.count);
       })(),
 
       // Forum stats
       totalForumPosts: forumPosts.length,
-      avgCommentsPerPost: forumPosts.length > 0
-        ? (forumPosts.reduce((sum, p) => sum + (p.commentCount || 0), 0) / forumPosts.length).toFixed(2)
-        : 0,
+      avgCommentsPerPost:
+        forumPosts.length > 0
+          ? (
+              forumPosts.reduce((sum, p) => sum + (p.commentCount || 0), 0) /
+              forumPosts.length
+            ).toFixed(2)
+          : 0,
 
       // Activity score (1-100 based on multiple factors)
-      activityScore: Math.min(100, Math.round(
-        (projects.length / 5) + // 20 pts per 100 projects
-        (stats.avgVotesPerProject * 2) + // votes
-        (forumPosts.length / 2) + // forum activity
-        ((projects.filter(p => p.presentationLink).length / projects.length) * 30) + // demo %
-        ((projects.filter(p => p.repoLink).length / projects.length) * 30) // repo %
-      )),
+      activityScore: Math.min(
+        100,
+        Math.round(
+          projects.length / 5 + // 20 pts per 100 projects
+            stats.avgVotesPerProject * 2 + // votes
+            forumPosts.length / 2 + // forum activity
+            (projects.filter((p) => p.presentationLink).length /
+              projects.length) *
+              30 + // demo %
+            (projects.filter((p) => p.repoLink).length / projects.length) * 30, // repo %
+        ),
+      ),
 
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     res.json(stats);
-
   } catch (error) {
-    logger.error('Ecosystem stats error:', error);
+    logger.error("Ecosystem stats error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1630,38 +1811,43 @@ app.get("/api/forum-activity", async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
 
-    const api = new (await import('./services/colosseumAPI.js')).ColosseumAPI();
-    const posts = await api.getForumPosts({ limit, sort: 'new' });
+    const api = new (await import("./services/colosseumAPI.js")).ColosseumAPI();
+    const posts = await api.getForumPosts({ limit, sort: "new" });
 
     const activity = {
-      posts: posts.map(p => ({
+      posts: posts.map((p) => ({
         id: p.id,
         title: p.title,
         agentName: p.agentName,
         createdAt: p.createdAt,
         commentCount: p.commentCount || 0,
         voteCount: p.voteCount || 0,
-        engagement: (p.commentCount || 0) + (p.voteCount || 0)
+        engagement: (p.commentCount || 0) + (p.voteCount || 0),
       })),
       totalPosts: posts.length,
-      avgEngagement: posts.length > 0
-        ? ((posts.reduce((sum, p) => sum + (p.commentCount || 0) + (p.voteCount || 0), 0)) / posts.length).toFixed(2)
-        : 0,
+      avgEngagement:
+        posts.length > 0
+          ? (
+              posts.reduce(
+                (sum, p) => sum + (p.commentCount || 0) + (p.voteCount || 0),
+                0,
+              ) / posts.length
+            ).toFixed(2)
+          : 0,
       mostEngaged: posts
-        .map(p => ({
+        .map((p) => ({
           title: p.title,
           agentName: p.agentName,
-          engagement: (p.commentCount || 0) + (p.voteCount || 0)
+          engagement: (p.commentCount || 0) + (p.voteCount || 0),
         }))
         .sort((a, b) => b.engagement - a.engagement)
         .slice(0, 5),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     res.json(activity);
-
   } catch (error) {
-    logger.error('Forum activity error:', error);
+    logger.error("Forum activity error:", error);
     res.status(500).json({ error: error.message });
   }
 });
