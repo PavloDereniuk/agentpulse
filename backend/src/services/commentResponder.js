@@ -375,6 +375,11 @@ async postResponse(postId, originalComment, responseText) {
  * Simple sentiment analysis helper
  */
 analyzeSentiment(text) {
+  // Handle undefined/null text
+  if (!text || typeof text !== 'string') {
+    return 'neutral';
+  }
+  
   const lowerText = text.toLowerCase();
   
   // Check for positive words
