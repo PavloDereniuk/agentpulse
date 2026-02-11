@@ -18,6 +18,7 @@ function Evolution() {
   const [evolution, setEvolution] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const fetchEvolution = async () => {
     try {
@@ -145,37 +146,59 @@ function Evolution() {
 
           {/* Adaptation History */}
           <div className="evo-history">
-            <h3 className="evo-subtitle">Adaptation History</h3>
+            <h3 className="evo-subtitle">
+              Adaptation History
+              {history.length > 0 && (
+                <span className="evo-history-count">{history.length} total</span>
+              )}
+            </h3>
             {history.length === 0 ? (
               <p className="evo-no-history">No adaptations recorded yet. The agent will self-improve every 6 hours.</p>
             ) : (
-              <div className="evo-timeline">
-                {history.slice(0, 10).map((record, i) => (
-                  <div key={record.id || i} className="evo-record">
-                    <div className="evo-record-header">
-                      <span className="evo-record-version">v{record.strategy_version}</span>
-                      <span className="evo-record-score">
-                        Score: {record.performance_score}/10
-                      </span>
-                      <span className="evo-record-time">
-                        {formatTime(record.created_at)}
-                      </span>
-                    </div>
-                    {record.analysis?.summary && (
-                      <p className="evo-record-summary">{record.analysis.summary}</p>
-                    )}
-                    {record.adaptations?.length > 0 && (
-                      <div className="evo-record-changes">
-                        {record.adaptations.map((a, j) => (
-                          <span key={j} className="evo-change">
-                            {a.parameter}: <span className="evo-old">{String(a.oldValue)}</span> → <span className="evo-new">{String(a.newValue)}</span>
+              <>
+                <div className="evo-timeline">
+                  {history.slice(0, showAllHistory ? 10 : 3).map((record, i) => (
+                    <div key={record.id || i} className="evo-record">
+                      <div className="evo-record-header">
+                        <span className="evo-record-version">v{record.strategy_version}</span>
+                        <span className="evo-record-score">
+                          Score: {record.performance_score}/10
+                        </span>
+                        {record.analysis?.trendDirection && (
+                          <span className={`evo-trend evo-trend-${record.analysis.trendDirection}`}>
+                            {record.analysis.trendDirection === 'improving' ? '📈' : 
+                             record.analysis.trendDirection === 'declining' ? '📉' : '➡️'}
+                            {record.analysis.trendDirection}
                           </span>
-                        ))}
+                        )}
+                        <span className="evo-record-time">
+                          {formatTime(record.created_at)}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      {record.analysis?.summary && (
+                        <p className="evo-record-summary">{record.analysis.summary}</p>
+                      )}
+                      {record.adaptations?.length > 0 && (
+                        <div className="evo-record-changes">
+                          {record.adaptations.map((a, j) => (
+                            <span key={j} className="evo-change">
+                              {a.parameter}: <span className="evo-old">{String(a.oldValue)}</span> → <span className="evo-new">{String(a.newValue)}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {history.length > 3 && (
+                  <button 
+                    className="evo-show-more"
+                    onClick={() => setShowAllHistory(!showAllHistory)}
+                  >
+                    {showAllHistory ? 'Show less' : `Show all ${history.length} adaptations`}
+                  </button>
+                )}
+              </>
             )}
           </div>
 

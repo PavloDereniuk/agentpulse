@@ -35,20 +35,13 @@ export class SelfImproveService {
 
     // Adaptive parameters that the agent can change
     this.strategy = {
-      // Posting strategy
-      postingTone: 'enthusiastic', // enthusiastic | analytical | balanced
-      insightFocus: 'trends', // trends | predictions | community | technical
-      optimalPostHour: 9, // UTC hour for best engagement
-      
-      // Quality thresholds
-      minQualityScore: 6, // out of 8
+      postingTone: 'enthusiastic',
+      insightFocus: 'trends',
+      optimalPostHour: 9,
+      minQualityScore: 6,
       maxDailyPosts: 5,
-      
-      // Engagement targets
       targetUpvotesPerPost: 5,
       targetCommentsPerPost: 2,
-      
-      // Version tracking
       version: 1,
       lastAdapted: null,
       adaptationHistory: [],
@@ -59,6 +52,50 @@ export class SelfImproveService {
       lastAdaptationTime: null,
       currentStrategyVersion: 1,
     };
+
+    // Load latest strategy from DB on startup
+    this._loadStrategyFromDB();
+  }
+
+  /**
+   * Load latest strategy state from database so we don't reset on restart
+   */
+  async _loadStrategyFromDB() {
+    try {
+      if (!this.db.pool) return;
+
+      const result = await this.db.pool.query(`
+        SELECT * FROM self_improvements
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+
+      if (result.rows.length > 0) {
+        const latest = result.rows[0];
+        const adaptations = latest.adaptations || [];
+        
+        // Replay all adaptations from latest record to restore state
+        for (const a of adaptations) {
+          if (a.parameter && a.newValue !== undefined && this.strategy.hasOwnProperty(a.parameter)) {
+            this.strategy[a.parameter] = a.newValue;
+          }
+        }
+        
+        this.strategy.version = latest.strategy_version || 1;
+        this.strategy.lastAdapted = latest.created_at;
+        this.stats.currentStrategyVersion = this.strategy.version;
+        
+        // Count total adaptations
+        const countResult = await this.db.pool.query(
+          `SELECT COUNT(*) as count FROM self_improvements`
+        );
+        this.stats.adaptations = parseInt(countResult.rows[0]?.count || 0);
+        
+        this.logger.info(`🧬 Loaded strategy v${this.strategy.version} from DB (${this.stats.adaptations} total adaptations)`);
+      }
+    } catch (error) {
+      this.logger.warn('Could not load strategy from DB:', error.message);
+    }
   }
 
   /**
@@ -188,23 +225,84 @@ export class SelfImproveService {
   }
 
   /**
-   * Analyze performance with Claude
+   * Get previous adaptation cycles with before/after comparison
+   */
+  async getPreviousCycles(limit = 3) {
+    try {
+      if (!this.db.pool) return [];
+      
+      const result = await this.db.pool.query(`
+        SELECT strategy_version, metrics, analysis, adaptations, performance_score, created_at
+        FROM self_improvements
+        ORDER BY created_at DESC
+        LIMIT $1
+      `, [limit]);
+
+      return result.rows.map((row, i, arr) => {
+        const next = arr[i + 1]; // previous cycle (older)
+        return {
+          version: row.strategy_version,
+          score: row.performance_score,
+          summary: row.analysis?.summary || '',
+          adaptations: row.adaptations || [],
+          metrics: {
+            posts: row.metrics?.posts?.count || 0,
+            avgUpvotes: row.metrics?.posts?.avgUpvotes || 0,
+            avgComments: row.metrics?.posts?.avgComments || 0,
+            votesGiven: row.metrics?.voting?.votesGiven || 0,
+          },
+          // Compare with previous cycle
+          delta: next ? {
+            scoreDelta: (row.performance_score || 0) - (next.performance_score || 0),
+            upvoteDelta: parseFloat(row.metrics?.posts?.avgUpvotes || 0) - parseFloat(next.metrics?.posts?.avgUpvotes || 0),
+          } : null,
+          timestamp: row.created_at,
+        };
+      });
+    } catch (error) {
+      this.logger.warn('Failed to load previous cycles:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Analyze performance with Claude — with cumulative learning
    */
   async analyzePerformance(metrics) {
-    const prompt = `You are AgentPulse's self-improvement engine. Analyze these performance metrics and provide actionable feedback.
+    // Load previous cycles for context
+    const previousCycles = await this.getPreviousCycles(3);
 
-Current Strategy:
+    let historyBlock = '';
+    if (previousCycles.length > 0) {
+      historyBlock = `\n\nPREVIOUS ADAPTATION HISTORY (learn from these):`;
+      for (const cycle of previousCycles) {
+        const changes = (cycle.adaptations || [])
+          .map(a => `${a.parameter}: ${a.oldValue} -> ${a.newValue}`)
+          .join(', ');
+        const delta = cycle.delta 
+          ? ` | Impact: score ${cycle.delta.scoreDelta >= 0 ? '+' : ''}${cycle.delta.scoreDelta.toFixed(1)}, upvotes ${cycle.delta.upvoteDelta >= 0 ? '+' : ''}${cycle.delta.upvoteDelta.toFixed(1)}`
+          : ' | (first cycle, no comparison)';
+        historyBlock += `\n- v${cycle.version} (score ${cycle.score}/10): ${changes || 'no changes'}${delta}`;
+        if (cycle.summary) historyBlock += `\n  Assessment: "${cycle.summary}"`;
+      }
+      historyBlock += `\n\nIMPORTANT: If a previous change made things worse (negative delta), consider reverting it. If a change improved things, reinforce that direction.`;
+    }
+
+    const prompt = `You are AgentPulse's self-improvement engine. Analyze performance metrics and provide actionable feedback.
+
+Current Strategy (v${this.strategy.version}):
 - Tone: ${this.strategy.postingTone}
 - Focus: ${this.strategy.insightFocus}
 - Quality threshold: ${this.strategy.minQualityScore}/8
 - Max daily posts: ${this.strategy.maxDailyPosts}
-- Strategy version: ${this.strategy.version}
+- Optimal post hour: ${this.strategy.optimalPostHour}:00 UTC
 
 Last 24h Performance:
 - Posts created: ${metrics.posts?.count || 0}
 - Avg upvotes per post: ${metrics.posts?.avgUpvotes || 0}
 - Avg comments per post: ${metrics.posts?.avgComments || 0}
 - Best post upvotes: ${metrics.posts?.maxUpvotes || 0}
+- Total upvotes: ${metrics.posts?.totalUpvotes || 0}
 - Votes given to others: ${metrics.voting?.votesGiven || 0}
 - Comment responses: ${metrics.comments?.responsesGiven || 0}
 - On-chain logs: ${metrics.onChain?.logsToday || 0}
@@ -212,10 +310,16 @@ Last 24h Performance:
 Targets:
 - Target upvotes/post: ${this.strategy.targetUpvotesPerPost}
 - Target comments/post: ${this.strategy.targetCommentsPerPost}
+${historyBlock}
+
+Rules:
+- Only recommend changes if data supports it. "No change" is a valid recommendation.
+- Max 2 parameter changes per cycle to avoid instability.
+- If performance is good (score 7+), prefer stability over experimentation.
 
 Respond in JSON:
 {
-  "summary": "2-3 sentence overall assessment",
+  "summary": "2-3 sentence assessment referencing specific metrics and any lessons from previous cycles",
   "strengths": ["what's working well"],
   "weaknesses": ["what needs improvement"],
   "recommendations": [
@@ -223,10 +327,11 @@ Respond in JSON:
       "parameter": "postingTone|insightFocus|minQualityScore|maxDailyPosts|optimalPostHour",
       "currentValue": "...",
       "suggestedValue": "...",
-      "reason": "why this change"
+      "reason": "why this change, referencing data"
     }
   ],
-  "performanceScore": <1-10>
+  "performanceScore": <1-10>,
+  "trendDirection": "improving|stable|declining"
 }`;
 
     try {
@@ -262,7 +367,9 @@ Respond in JSON:
     const adaptations = [];
 
     for (const rec of analysis.recommendations || []) {
-      // Validate the recommendation
+      // Max 2 changes per cycle for stability
+      if (adaptations.length >= 2) break;
+
       if (!rec.parameter || !rec.suggestedValue) continue;
 
       // Only adapt parameters we control
@@ -386,7 +493,10 @@ Respond in JSON:
         [
           this.strategy.version,
           JSON.stringify(metrics),
-          JSON.stringify(analysis),
+          JSON.stringify({
+            ...analysis,
+            trendDirection: analysis.trendDirection || 'stable',
+          }),
           JSON.stringify(adaptations),
           analysis.performanceScore || 5,
         ]

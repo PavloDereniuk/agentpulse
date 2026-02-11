@@ -232,3 +232,51 @@
     flex-wrap: wrap;
   }
 }
+
+.evo-show-more {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-top: 12px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  color: #a78bfa;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.evo-show-more:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.evo-history-count {
+  font-size: 12px;
+  color: #888;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.evo-trend {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.evo-trend-improving {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.evo-trend-declining {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.evo-trend-stable {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9ca3af;
+}
