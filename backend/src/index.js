@@ -1209,60 +1209,45 @@ app.get("/api/proofs/stats", async (req, res) => {
 // Get reasoning proofs directly from database (faster, doesn't need blockchain)
 app.get("/api/proofs/db", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 100;
     const type = req.query.type;
 
-    logger.info(
-      `Fetching proofs from DB (limit: ${limit}, type: ${type || "all"})`,
+    // Always get ALL proofs for stats
+    const allResult = await db.pool.query(
+      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200"
     );
+    const allProofs = allResult.rows;
 
-    // Build query
-    let query = "SELECT * FROM action_reasoning";
-    const params = [];
-
-    if (type) {
-      query += " WHERE action_type = $1";
-      params.push(type);
-    }
-
-    query += " ORDER BY created_at DESC LIMIT $" + (params.length + 1);
-    params.push(limit);
-
-    // Get from database
-    const result = await db.pool.query(query, params);
-    const proofs = result.rows;
-
-    // Calculate stats
+    // Calculate stats from ALL proofs (not filtered)
     const stats = {
-      total: proofs.length,
+      total: allProofs.length,
       byType: {},
       averageConfidence: 0,
-      withReasoning: proofs.length,
+      withReasoning: allProofs.filter(p => p.reasoning?.length > 50).length,
     };
 
-    // Count by type
-    proofs.forEach((p) => {
+    allProofs.forEach((p) => {
       stats.byType[p.action_type] = (stats.byType[p.action_type] || 0) + 1;
     });
 
-    // Calculate average confidence
-    const withConfidence = proofs.filter((p) => p.confidence !== null);
+    const withConfidence = allProofs.filter((p) => p.confidence !== null);
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
-        1,
-      );
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(1);
     }
 
+    // Filter for display
+    const filtered = type 
+      ? allProofs.filter(p => p.action_type === type) 
+      : allProofs;
+
     // Format for frontend
-    const formattedProofs = proofs.map((p) => ({
+    const formattedProofs = filtered.map((p) => ({
       type: p.action_type,
       reasoning: p.reasoning,
       confidence: p.confidence,
       factors: p.factors,
       timestamp: p.created_at,
       hash: p.action_hash,
-      // Mock explorer URL since we don't have on-chain signature from DB
       explorerUrl: "#",
       verified: true,
     }));
