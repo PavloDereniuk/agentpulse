@@ -49,6 +49,10 @@ class AutonomousAgent {
     this.logger = new Logger("AutonomousAgent");
     this.qualityChecker = new QualityChecker();
 
+    // Wire self-evolution strategy to consuming services
+    this.forumEngager.strategyProvider = this.selfImprove;
+    this.votingService.strategyProvider = this.selfImprove;
+
     // State
     this.isRunning = false;
     this.stats = {

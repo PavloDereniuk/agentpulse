@@ -39,6 +39,21 @@ this.config = {
       postsChecked: 0,
       lastRunTime: null,
     };
+
+    // Will be set by AutonomousAgent to read evolved strategy
+    this.strategyProvider = null;
+  }
+
+  /**
+   * Get current evolved strategy (with fallbacks)
+   */
+  getEvolutionStrategy() {
+    if (!this.strategyProvider) return {};
+    try {
+      return this.strategyProvider.getStrategy();
+    } catch {
+      return {};
+    }
   }
 
   /**
@@ -52,14 +67,19 @@ this.config = {
       // Ensure DB table exists
       await this.ensureTable();
 
-      // Check daily limit
+      // Check daily limit (use evolved strategy if available)
+      const strategy = this.getEvolutionStrategy();
+      const maxDaily = strategy.maxDailyPosts 
+        ? strategy.maxDailyPosts * 6  // strategy tracks posts, we do comments (6x)
+        : this.config.maxCommentsPerDay;
+      
       const todayCount = await this.getTodayCommentCount();
-      if (todayCount >= this.config.maxCommentsPerDay) {
-        this.logger.info(`Daily limit reached (${todayCount}/${this.config.maxCommentsPerDay}), skipping`);
+      if (todayCount >= maxDaily) {
+        this.logger.info(`Daily limit reached (${todayCount}/${maxDaily}), skipping`);
         return { engaged: 0, reason: 'daily_limit' };
       }
 
-      const remaining = this.config.maxCommentsPerDay - todayCount;
+      const remaining = maxDaily - todayCount;
       const cycleLimit = Math.min(this.config.maxCommentsPerCycle, remaining);
 
       // 1. Get recent forum posts
@@ -169,9 +189,31 @@ this.config = {
    * Generate a thoughtful comment using Claude
    */
   async generateComment(post) {
+    // Read evolved strategy for tone and focus
+    const strategy = this.getEvolutionStrategy();
+    const tone = strategy.postingTone || 'enthusiastic';
+    const focus = strategy.insightFocus || 'trends';
+
+    const toneInstruction = {
+      enthusiastic: 'Be warm, encouraging, and show genuine excitement about their work.',
+      analytical: 'Be precise, data-driven, and focus on technical merits and metrics.',
+      balanced: 'Mix warmth with analytical observations. Be constructive and specific.',
+    }[tone] || 'Be warm but concise.';
+
+    const focusInstruction = {
+      trends: 'If relevant, connect their work to broader ecosystem trends you observe.',
+      predictions: 'If relevant, share a forward-looking insight about where their approach could lead.',
+      community: 'Emphasize community impact and how their work helps the ecosystem.',
+      technical: 'Focus on technical implementation details and architecture choices.',
+    }[focus] || '';
+
     const prompt = `You are AgentPulse (Agent #503), an autonomous analytics agent in the Colosseum AI Agent Hackathon. You track ecosystem health, generate leaderboards, and log actions on-chain.
 
 You're reading a forum post by another agent and want to leave a thoughtful comment. Your goal: be genuinely helpful and build community relationships. NOT to promote yourself.
+
+COMMUNICATION STYLE: ${tone}
+${toneInstruction}
+${focusInstruction ? `FOCUS AREA: ${focusInstruction}` : ''}
 
 POST TITLE: "${post.title}"
 POST AUTHOR: ${post.agentName}
@@ -184,7 +226,7 @@ Write a comment (2-4 sentences) that:
 - Is specific — reference concrete details from their post
 - Sounds like a real collaborative agent, not a bot leaving generic praise
 - If relevant, briefly mention how it relates to analytics/data/ecosystem health (your domain) — but DON'T pitch AgentPulse
-- Be warm but concise
+- ${toneInstruction}
 
 DO NOT:
 - Start with "Great post!" or similar generic openers

@@ -49,6 +49,26 @@ export class VotingService {
       votesGiven: 0,
       lastVoteTime: null,
     };
+
+    // Will be set by AutonomousAgent to read evolved strategy
+    this.strategyProvider = null;
+  }
+
+  /**
+   * Get evolved min score threshold (fallback to config)
+   */
+  getMinScoreThreshold() {
+    if (this.strategyProvider) {
+      try {
+        const strategy = this.strategyProvider.getStrategy();
+        // Strategy minQualityScore is 0-8, map to vote threshold
+        if (strategy.minQualityScore !== undefined) {
+          // minQualityScore 6 → minScore 5.5, 7 → 6.0, 5 → 5.0
+          return Math.max(4.0, strategy.minQualityScore - 0.5);
+        }
+      } catch {}
+    }
+    return this.config.minScoreToVote;
   }
 
   /**
@@ -120,7 +140,7 @@ export class VotingService {
             fit: claudeEval?.breakdown?.fit || 5,
           },
           reasoning: claudeEval?.reasoning || "Evaluation completed",
-          shouldVote: finalScore >= this.config.minScoreToVote,
+          shouldVote: finalScore >= this.getMinScoreThreshold(),
           evaluatedAt: new Date().toISOString(),
         };
 
@@ -149,7 +169,7 @@ export class VotingService {
           }
         } else {
           this.logger.info(
-            `Project ${project.id} score ${evaluation.finalScore}/10 - below threshold`,
+            `Project ${project.id} score ${evaluation.finalScore}/10 - below threshold (${this.getMinScoreThreshold()})`,
           );
         }
 
