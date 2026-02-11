@@ -1645,11 +1645,8 @@ app.post("/api/evaluate/live", async (req, res) => {
       objectiveScore += 2;
     }
 
-    // Demo check (+3 points) - search across all possible field names  
-    const demoLink = project.technicalDemoLink || project.technical_demo_link || project.demo || project.demoUrl || project.demo_url || project.liveAppLink || project.live_app_link || project.deployedUrl || project.deployed_url || project.websiteUrl || project.website || project.data?.demo || project.data?.technicalDemoLink || project.data?.liveAppLink || '';
-    if (demoLink && demoLink.trim()) {
-      objectiveScore += 3;
-    }
+    // Demo check - SKIPPED (Colosseum list API does not expose demo links)
+    const demoLink = '';
 
     // Description quality (0-2.5 points)
     const descLength = (project.description || "").length;
@@ -1740,7 +1737,9 @@ Respond ONLY with JSON (no markdown, no backticks):
     }
 
     // Calculate final score (40% objective + 60% AI)
-    const finalScore = objectiveScore * 0.4 + aiEval.overall * 0.6;
+    // Normalize objective to /10 scale (max raw = 7)
+    const objectiveNormalized = (objectiveScore / 7) * 10;
+    const finalScore = objectiveNormalized * 0.4 + aiEval.overall * 0.6;
     const confidence =
       finalScore >= 8
         ? 0.95
@@ -1762,9 +1761,8 @@ Respond ONLY with JSON (no markdown, no backticks):
    Description: ${descLength} characters
 
 2. OBJECTIVE ANALYSIS (40% weight)
-   Score: ${objectiveScore.toFixed(1)}/10
+   Score: ${objectiveNormalized.toFixed(1)}/10 (raw: ${objectiveScore.toFixed(1)}/7)
    ✓ GitHub Repository: ${githubLink ? "✅ YES (+2.0)" : "❌ NO (0.0)"}
-   ✓ Working Demo: ${demoLink ? "✅ YES (+3.0)" : "❌ NO (0.0)"}
    ✓ Description Quality: ${descLength > 500 ? "Excellent (2.5)" : descLength > 200 ? "Good (1.5)" : descLength > 50 ? "Basic (0.5)" : "Minimal (0.0)"}
    ✓ Video Demo: ${videoLink ? "✅ YES (+2.5)" : "❌ NO (0.0)"}
 
@@ -1780,7 +1778,7 @@ Respond ONLY with JSON (no markdown, no backticks):
 
 4. FINAL CALCULATION
    Formula: (Objective × 0.4) + (AI × 0.6)
-   Calculation: (${objectiveScore.toFixed(1)} × 0.4) + (${aiEval.overall} × 0.6)
+   Calculation: (${objectiveNormalized.toFixed(1)} × 0.4) + (${aiEval.overall} × 0.6)
    Result: ${finalScore.toFixed(1)}/10
    
    Threshold: 5.5/10 (balanced strategy)
@@ -1793,7 +1791,7 @@ Respond ONLY with JSON (no markdown, no backticks):
 === END OF EVALUATION ===`,
 
       factors: {
-        objectiveScore: objectiveScore.toFixed(1),
+        objectiveScore: objectiveNormalized.toFixed(1),
         aiScore: aiEval.overall.toFixed(1),
         finalScore: finalScore.toFixed(1),
         innovation: aiEval.innovation,
@@ -1801,7 +1799,6 @@ Respond ONLY with JSON (no markdown, no backticks):
         potential: aiEval.potential,
         ecosystemFit: aiEval.ecosystemFit,
         hasGitHub: githubLink ? "✅" : "❌",
-        hasDemo: demoLink ? "✅" : "❌",
         hasVideo: videoLink ? "✅" : "❌",
         confidence: `${(confidence * 100).toFixed(0)}%`,
       },
@@ -1819,7 +1816,7 @@ Respond ONLY with JSON (no markdown, no backticks):
         description: (project.description || "").substring(0, 300) + "...",
       },
       evaluation: {
-        objectiveScore: parseFloat(objectiveScore.toFixed(1)),
+        objectiveScore: parseFloat(objectiveNormalized.toFixed(1)),
         aiScore: aiEval.overall,
         finalScore: parseFloat(finalScore.toFixed(1)),
         confidence: confidence,
