@@ -343,17 +343,28 @@ Response:`;
 
     // Generate reasoning for this response
     const reasoning = this.reasoningService.generateCommentReasoning(
-      originalComment,
+      {
+        id: originalComment.id,
+        author: originalComment.agentName || "Unknown",
+        content: originalComment.content || originalComment.body || "",
+        createdAt:
+          originalComment.createdAt || originalComment.created_at || new Date(),
+      },
       {
         content: responseText,
-        sentiment: this.analyzeSentiment(originalComment.content),
+        sentiment: this.analyzeSentiment(
+          originalComment.content || originalComment.body || "",
+        ),
         strategy: "helpful_and_engaging",
         tone: "professional_yet_friendly",
         keyPoints: ["Provide value", "Build community"],
-        hasQuestion: responseText.includes("?"),
+        hasQuestion: (originalComment.content || "").includes("?"),
         urgency: "normal",
         confidence: 0.85,
         expectedImpact: "Positive community interaction",
+        commentLength: (originalComment.content || originalComment.body || "")
+          .length,
+        responseLength: responseText.length,
       },
     );
 
