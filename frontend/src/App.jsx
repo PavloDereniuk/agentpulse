@@ -13,6 +13,7 @@ import Evolution from "./components/Evolution";
 import Proof from "./components/Proof";
 import Analytics from "./components/Analytics";
 import NetworkGraph from "./components/NetworkGraph";
+import Learning from "./components/Learning";
 import "./App.css";
 
 const API_BASE =
@@ -122,6 +123,12 @@ function App() {
               onClick={() => setCurrentTab("network")}
             >
               🌐 Network
+            </button>
+            <button
+              className={`nav-tab ${currentTab === "learning" ? "active" : ""}`}
+              onClick={() => setCurrentTab("learning")}
+            >
+              🧠 Learning
             </button>
           </div>
         </div>
@@ -394,6 +401,8 @@ function App() {
         {currentTab === "analytics" && <Analytics />}
         {/* Network Tab */}
         {currentTab === "network" && <NetworkGraph />}
+        {/* Learning Tab */}
+        {currentTab === "learning" && <Learning />}
       </main>
 
       {/* Footer */}
