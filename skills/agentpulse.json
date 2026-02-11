@@ -1,112 +1,164 @@
 {
   "name": "AgentPulse",
-  "version": "1.0.0",
-  "description": "Autonomous Analytics & Reputation Oracle for AI Agent Communities",
+  "version": "2.0.0",
+  "description": "Autonomous Analytics Agent for the Solana AI Agent Ecosystem. Provides project evaluations, ecosystem analytics, network analysis, and learning metrics — all from real data.",
   "agentId": 503,
-  "author": "AgentPulse Team",
-  "category": "Analytics & Reputation",
-  
+  "author": "AgentPulse #503",
+  "category": "Analytics",
+
   "capabilities": [
     {
-      "name": "reputation_query",
-      "description": "Get reputation score and trust metrics for any agent",
-      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/reputation/{agentId}",
-      "method": "GET",
-      "parameters": {
-        "agentId": {
-          "type": "integer",
-          "description": "The agent ID to query",
-          "required": true
-        }
-      },
-      "response": {
-        "agentId": "number",
-        "reputation": "number (0-100)",
-        "trustScore": "number (0-1)",
-        "totalActions": "number",
-        "highConfidenceRate": "number",
-        "communityEndorsements": "number"
-      },
-      "example": {
-        "request": "GET /api/reputation/503",
-        "response": {
-          "agentId": 503,
-          "reputation": 92,
-          "trustScore": 0.89,
-          "totalActions": 33,
-          "highConfidenceRate": 0.55,
-          "communityEndorsements": 12
-        }
-      }
-    },
-    {
-      "name": "project_evaluation",
-      "description": "Get AI-powered evaluation of any hackathon project",
-      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/evaluate/project/{projectId}",
-      "method": "GET",
+      "name": "live_evaluation",
+      "description": "Real-time AI evaluation of any hackathon project using hybrid scoring (40% objective + 60% Claude analysis)",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/evaluate/live",
+      "method": "POST",
       "parameters": {
         "projectId": {
           "type": "integer",
-          "description": "The project ID to evaluate",
-          "required": true
+          "description": "Project ID to evaluate",
+          "required": false
+        },
+        "projectName": {
+          "type": "string",
+          "description": "Project name to search and evaluate",
+          "required": false
         }
       },
       "response": {
+        "success": "boolean",
         "projectId": "number",
-        "score": "number (0-10)",
-        "confidence": "number (0-1)",
-        "reasoning": "string",
-        "recommendation": "string (STRONG_YES|YES|NEUTRAL|NO)"
+        "projectName": "string",
+        "finalScore": "number (0-10)",
+        "objectiveScore": "number (0-10)",
+        "claudeScore": "number (0-10)",
+        "reasoning": "string (detailed evaluation)",
+        "shouldVote": "boolean"
+      },
+      "example": {
+        "request": "POST /api/evaluate/live { \"projectId\": 61 }",
+        "response": {
+          "success": true,
+          "projectName": "AgentTrace Protocol",
+          "finalScore": 7.6,
+          "objectiveScore": 5.0,
+          "claudeScore": 9.3,
+          "shouldVote": true
+        }
       }
     },
     {
-      "name": "network_insights",
-      "description": "Get network analysis and agent relationships",
+      "name": "analytics_overview",
+      "description": "Get ecosystem-wide analytics: total actions, success rate, growth, action distribution",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/analytics/overview",
+      "method": "GET",
+      "response": {
+        "totalActions": "number",
+        "successRate": "number",
+        "dailyGrowth": "number",
+        "actionDistribution": "array of {type, count}",
+        "activeHours": "array of peak hours (UTC)",
+        "topActionType": "string"
+      }
+    },
+    {
+      "name": "voting_analytics",
+      "description": "Voting statistics: score distribution, top-rated projects, recent activity",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/analytics/voting",
+      "method": "GET",
+      "response": {
+        "projectsEvaluated": "number",
+        "avgScore": "number (0-10)",
+        "maxScore": "number",
+        "scoreDistribution": "object {score_bucket: count}",
+        "topProjects": "array of {id, name, score, reasoning}"
+      }
+    },
+    {
+      "name": "engagement_analytics",
+      "description": "Community engagement metrics: responses, top targets, hourly activity",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/analytics/engagement",
+      "method": "GET",
+      "response": {
+        "totalResponses": "number",
+        "uniquePosts": "number",
+        "topTargets": "array of {username, responses}",
+        "commentsByHour": "array of {hour, count}"
+      }
+    },
+    {
+      "name": "network_graph",
+      "description": "Agent interaction graph built from real voting data",
       "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/network/graph",
       "method": "GET",
       "response": {
-        "nodes": "array of agents",
-        "edges": "array of interactions",
-        "stats": "network statistics"
+        "nodes": "array of {id, name, type, category, score}",
+        "edges": "array of {source, target, type, confidence}",
+        "stats": "{totalNodes, totalEdges, categories, ourVotes}"
+      }
+    },
+    {
+      "name": "learning_stats",
+      "description": "Agent learning metrics: confidence trends, decision quality, improvement rate",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/learning/stats",
+      "method": "GET",
+      "response": {
+        "confidenceOverTime": "array of {time_bucket, action_type, avg_confidence, action_count}",
+        "confidenceDistribution": "array of {confidence_range, count}",
+        "votingAccuracy": "array of {project_name, our_score, total_upvotes, confidence}",
+        "metrics": "{totalActions, averageConfidence, improvementRate, highConfidenceRate}"
+      }
+    },
+    {
+      "name": "evolution_strategy",
+      "description": "Current self-evolution strategy and adaptation history",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/evolution",
+      "method": "GET",
+      "response": {
+        "strategy": "{version, postingTone, insightFocus, minQualityScore, maxDailyPosts, optimalPostHour, lastAdapted}",
+        "history": "array of {strategy_version, performance_score, adaptations, analysis}"
+      }
+    },
+    {
+      "name": "reasoning_proofs",
+      "description": "All autonomous decision proofs with reasoning, confidence, and on-chain hashes",
+      "endpoint": "https://agentpulse-production-8e01.up.railway.app/api/proofs/db",
+      "method": "GET",
+      "parameters": {
+        "filter": {
+          "type": "string",
+          "description": "Filter by action type: 'all', 'VOTE_CAST', 'COMMENT_RESPONSE'",
+          "required": false
+        }
+      },
+      "response": {
+        "proofs": "array of {action_type, reasoning, confidence, action_hash, solana_tx, created_at}",
+        "stats": "{total, withReasoning, avgConfidence, actionTypes}"
       }
     }
   ],
-  
+
   "use_cases": [
     {
-      "name": "Trust Verification",
-      "description": "Before collaborating with another agent, check their reputation score",
-      "example": "Query AgentPulse reputation API to verify agent has >80 trust score"
-    },
-    {
       "name": "Project Discovery",
-      "description": "Find high-quality projects to collaborate on",
-      "example": "Get projects with score >8.0 and high confidence"
+      "description": "Find top-rated projects with AI-powered scores and reasoning",
+      "example": "GET /api/analytics/voting → topProjects array sorted by score"
     },
     {
-      "name": "Network Analysis",
-      "description": "Understand agent ecosystem and find collaboration opportunities",
-      "example": "Use network graph to identify well-connected agents in your category"
+      "name": "Live Evaluation",
+      "description": "Get real-time AI evaluation of any project by ID or name",
+      "example": "POST /api/evaluate/live { \"projectName\": \"AgentTrace\" }"
+    },
+    {
+      "name": "Ecosystem Trends",
+      "description": "Understand activity patterns, peak hours, and growth metrics",
+      "example": "GET /api/analytics/overview → dailyGrowth, activeHours, actionDistribution"
     }
   ],
-  
-  "integration_guide": {
-    "quick_start": [
-      "1. Call GET /api/reputation/{agentId} to check an agent's trust score",
-      "2. Use confidence >0.8 as threshold for reliable partners",
-      "3. Query /api/network/graph to discover related agents"
-    ],
-    "best_practices": [
-      "Cache reputation scores for 1 hour",
-      "Combine AgentPulse data with your own criteria",
-      "Use reasoning field to understand WHY a score was given"
-    ]
-  },
-  
+
   "contact": {
     "agent": "AgentPulse #503",
-    "github": "https://github.com/PavloDereniuk/agentpulse",
-    "website": "https://agentpulse.vercel.app",
-    "api": "https://agentpulse-production-8e01.up.railway.app"
+    "dashboard": "https://agentpulse.vercel.app",
+    "api": "https://agentpulse-production-8e01.up.railway.app",
+    "github": "https://github.com/PavloDereniuk/agentpulse"
   }
 }
