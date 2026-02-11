@@ -1048,6 +1048,183 @@ app.post("/api/trigger-self-improve", async (req, res) => {
   }
 });
 
+// Get on-chain proofs with full reasoning
+app.get('/api/proofs', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const type = req.query.type; // Optional filter by action type
+    
+    logger.info(`Fetching proofs (limit: ${limit}, type: ${type || 'all'})`);
+    
+    // Get on-chain proofs
+    const proofs = await solana.getOnChainProofs(limit);
+    
+    // Filter by type if requested
+    const filteredProofs = type 
+      ? proofs.filter(p => p.type === type)
+      : proofs;
+    
+    // Get reasoning from database for each proof
+    const proofsWithReasoning = await Promise.all(
+      filteredProofs.map(async (proof) => {
+        try {
+          const reasoning = await solana.getReasoningFromDB(proof.hash);
+          return {
+            ...proof,
+            reasoning: reasoning?.reasoning || null,
+            confidence: reasoning?.confidence || null,
+            factors: reasoning?.factors || {},
+          };
+        } catch (error) {
+          logger.warn(`Failed to get reasoning for ${proof.hash}:`, error.message);
+          return {
+            ...proof,
+            reasoning: null,
+            confidence: null,
+            factors: {},
+          };
+        }
+      })
+    );
+    
+    // Calculate stats
+    const stats = {
+      total: proofsWithReasoning.length,
+      byType: {},
+      averageConfidence: 0,
+      withReasoning: 0,
+    };
+    
+    // Count by type
+    proofsWithReasoning.forEach(p => {
+      stats.byType[p.type] = (stats.byType[p.type] || 0) + 1;
+      if (p.reasoning) stats.withReasoning++;
+    });
+    
+    // Calculate average confidence
+    const withConfidence = proofsWithReasoning.filter(p => p.confidence !== null);
+    if (withConfidence.length > 0) {
+      const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
+      stats.averageConfidence = (sum / withConfidence.length * 100).toFixed(1);
+    }
+    
+    res.json({
+      success: true,
+      stats,
+      proofs: proofsWithReasoning,
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get proofs:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Get stats about action types
+app.get('/api/proofs/stats', async (req, res) => {
+  try {
+    const proofs = await solanaService.getOnChainProofs(500);
+    
+    const stats = {
+      total: proofs.length,
+      byType: {},
+      timeline: {},
+    };
+    
+    proofs.forEach(p => {
+      // Count by type
+      stats.byType[p.type] = (stats.byType[p.type] || 0) + 1;
+      
+      // Count by date
+      if (p.timestamp) {
+        const date = p.timestamp.split('T')[0];
+        stats.timeline[date] = (stats.timeline[date] || 0) + 1;
+      }
+    });
+    
+    res.json({ success: true, stats });
+  } catch (error) {
+    logger.error('Failed to get proof stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get reasoning proofs directly from database (faster, doesn't need blockchain)
+app.get('/api/proofs/db', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const type = req.query.type;
+    
+    logger.info(`Fetching proofs from DB (limit: ${limit}, type: ${type || 'all'})`);
+    
+    // Build query
+    let query = 'SELECT * FROM action_reasoning';
+    const params = [];
+    
+    if (type) {
+      query += ' WHERE action_type = $1';
+      params.push(type);
+    }
+    
+    query += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1);
+    params.push(limit);
+    
+    // Get from database
+    const result = await db.pool.query(query, params);
+    const proofs = result.rows;
+    
+    // Calculate stats
+    const stats = {
+      total: proofs.length,
+      byType: {},
+      averageConfidence: 0,
+      withReasoning: proofs.length,
+    };
+    
+    // Count by type
+    proofs.forEach(p => {
+      stats.byType[p.action_type] = (stats.byType[p.action_type] || 0) + 1;
+    });
+    
+    // Calculate average confidence
+    const withConfidence = proofs.filter(p => p.confidence !== null);
+    if (withConfidence.length > 0) {
+      const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
+      stats.averageConfidence = (sum / withConfidence.length * 100).toFixed(1);
+    }
+    
+    // Format for frontend
+    const formattedProofs = proofs.map(p => ({
+      type: p.action_type,
+      reasoning: p.reasoning,
+      confidence: p.confidence,
+      factors: p.factors,
+      timestamp: p.created_at,
+      hash: p.action_hash,
+      // Mock explorer URL since we don't have on-chain signature from DB
+      explorerUrl: '#',
+      verified: true,
+    }));
+    
+    res.json({
+      success: true,
+      stats,
+      proofs: formattedProofs,
+      source: 'database',
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get proofs from DB:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 
 // ============================================================================
 // REPUTATION API ENDPOINTS
