@@ -14,6 +14,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://agentpulse-production-
 function SolanaActivity() {
   const [solanaStatus, setSolanaStatus] = useState(null);
   const [agentWallet, setAgentWallet] = useState(null);
+  const [onChainData, setOnChainData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -21,9 +22,10 @@ function SolanaActivity() {
   // Fetch Solana data
   const fetchSolanaData = async () => {
     try {
-      const [statusRes, walletRes] = await Promise.all([
+      const [statusRes, walletRes, logsRes] = await Promise.all([
         fetch(`${API_BASE}/api/solana/status`),
-        fetch(`${API_BASE}/api/solana/agent-wallet`)
+        fetch(`${API_BASE}/api/solana/agent-wallet`),
+        fetch(`${API_BASE}/api/solana/on-chain-logs`)
       ]);
 
       if (!statusRes.ok || !walletRes.ok) {
@@ -32,9 +34,11 @@ function SolanaActivity() {
 
       const statusData = await statusRes.json();
       const walletData = await walletRes.json();
+      const logsData = logsRes.ok ? await logsRes.json() : null;
 
       setSolanaStatus(statusData);
       setAgentWallet(walletData);
+      setOnChainData(logsData);
       setLastUpdate(new Date());
       setError(null);
     } catch (err) {
@@ -138,30 +142,30 @@ function SolanaActivity() {
           </div>
         </div>
 
-        {/* On-Chain Logs */}
+        {/* Verified Transactions - from DB */}
         <div className="stat-card logs-card">
-          <div className="stat-icon">📝</div>
+          <div className="stat-icon">🔗</div>
           <div className="stat-content">
-            <span className="stat-value">{stats?.totalMemoLogs || 0}</span>
-            <span className="stat-label">On-Chain Logs</span>
+            <span className="stat-value">{onChainData?.totalOnChain || stats?.totalMemoLogs || 0}</span>
+            <span className="stat-label">Verified Txs</span>
           </div>
         </div>
 
-        {/* Current Slot */}
+        {/* Votes with on-chain proof */}
         <div className="stat-card slot-card">
+          <div className="stat-icon">🗳️</div>
+          <div className="stat-content">
+            <span className="stat-value">{onChainData?.votesOnChain || 0}</span>
+            <span className="stat-label">Votes On-Chain</span>
+          </div>
+        </div>
+
+        {/* Action Types logged */}
+        <div className="stat-card reads-card">
           <div className="stat-icon">⚡</div>
           <div className="stat-content">
-            <span className="stat-value">{networkStatus?.slot?.toLocaleString() || '—'}</span>
-            <span className="stat-label">Slot</span>
-          </div>
-        </div>
-
-        {/* Total Reads */}
-        <div className="stat-card reads-card">
-          <div className="stat-icon">📊</div>
-          <div className="stat-content">
-            <span className="stat-value">{stats?.totalReads || 0}</span>
-            <span className="stat-label">Chain Reads</span>
+            <span className="stat-value">{onChainData?.actionTypeCount || 0}</span>
+            <span className="stat-label">Action Types</span>
           </div>
         </div>
       </div>

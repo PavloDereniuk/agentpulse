@@ -268,8 +268,20 @@ app.get("/api/solana/agent-wallet", async (req, res) => {
  * Get all on-chain logs from agent's memo transactions
  */
 app.get("/api/solana/on-chain-logs", async (req, res) => {
+  const emptyResponse = {
+    logs: [],
+    totalOnChain: 0,
+    votesOnChain: 0,
+    actionTypes: [],
+    actionTypeCount: 0,
+  };
+
   try {
-    // Get from database
+    if (!db.pool) {
+      return res.json(emptyResponse);
+    }
+
+    // Get logs with solana transactions from database
     const logs = await db.pool.query(`
       SELECT * FROM autonomy_log 
       WHERE details::text LIKE '%solanaTx%'
@@ -277,13 +289,34 @@ app.get("/api/solana/on-chain-logs", async (req, res) => {
       LIMIT 50
     `);
 
+    // Count total on-chain transactions from project_votes
+    const voteTxCount = await db.pool.query(`
+      SELECT COUNT(*) as count FROM project_votes 
+      WHERE solana_tx IS NOT NULL AND solana_tx != ''
+    `);
+
+    // Count distinct action types logged on-chain
+    const actionTypes = await db.pool.query(`
+      SELECT DISTINCT action, COUNT(*) as count 
+      FROM autonomy_log 
+      WHERE details::text LIKE '%solanaTx%'
+      GROUP BY action
+    `);
+
+    const totalFromLogs = logs.rows.length;
+    const totalFromVotes = parseInt(voteTxCount.rows[0]?.count || 0);
+    const totalVerified = Math.max(totalFromLogs, totalFromVotes);
+
     res.json({
       logs: logs.rows,
-      totalOnChain: solana.getStats().totalMemoLogs,
+      totalOnChain: totalVerified,
+      votesOnChain: totalFromVotes,
+      actionTypes: actionTypes.rows,
+      actionTypeCount: actionTypes.rows.length,
     });
   } catch (error) {
-    logger.error("Error getting on-chain logs:", error);
-    res.status(500).json({ error: error.message });
+    logger.error("Error getting on-chain logs:", error.message);
+    res.json(emptyResponse);
   }
 });
 
