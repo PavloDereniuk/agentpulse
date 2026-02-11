@@ -894,7 +894,8 @@ app.get("/api/analytics/voting", async (req, res) => {
       }, {}),
       topProjects: topProjectsResult.rows.map((row) => ({
         id: row.project_id,
-        name: row.project_name || row.project_slug || `Project #${row.project_id}`,
+        name:
+          row.project_name || row.project_slug || `Project #${row.project_id}`,
         slug: row.project_slug,
         score: parseFloat(row.score).toFixed(1),
         source: row.source,
@@ -1226,7 +1227,7 @@ app.get("/api/proofs/db", async (req, res) => {
 
     // Always get ALL proofs for stats
     const allResult = await db.pool.query(
-      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200"
+      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200",
     );
     const allProofs = allResult.rows;
 
@@ -1235,7 +1236,7 @@ app.get("/api/proofs/db", async (req, res) => {
       total: allProofs.length,
       byType: {},
       averageConfidence: 0,
-      withReasoning: allProofs.filter(p => p.reasoning?.length > 50).length,
+      withReasoning: allProofs.filter((p) => p.reasoning?.length > 50).length,
     };
 
     allProofs.forEach((p) => {
@@ -1245,12 +1246,14 @@ app.get("/api/proofs/db", async (req, res) => {
     const withConfidence = allProofs.filter((p) => p.confidence !== null);
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(1);
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
+        1,
+      );
     }
 
     // Filter for display
-    const filtered = type 
-      ? allProofs.filter(p => p.action_type === type) 
+    const filtered = type
+      ? allProofs.filter((p) => p.action_type === type)
       : allProofs;
 
     // Format for frontend
@@ -1627,13 +1630,26 @@ app.post("/api/evaluate/live", async (req, res) => {
     let objectiveScore = 0;
 
     // GitHub check (+2 points) - API uses different field names
-    const githubLink = project.repoLink || project.github || project.githubUrl || project.data?.repoLink || project.data?.github || '';
+    const githubLink =
+      project.repoLink ||
+      project.github ||
+      project.githubUrl ||
+      project.data?.repoLink ||
+      project.data?.github ||
+      "";
     if (githubLink && githubLink.trim()) {
       objectiveScore += 2;
     }
 
     // Demo check (+3 points) - API uses different field names
-    const demoLink = project.technicalDemoLink || project.demo || project.liveAppLink || project.data?.demo || project.data?.technicalDemoLink || project.data?.liveAppLink || '';
+    const demoLink =
+      project.technicalDemoLink ||
+      project.demo ||
+      project.liveAppLink ||
+      project.data?.demo ||
+      project.data?.technicalDemoLink ||
+      project.data?.liveAppLink ||
+      "";
     if (demoLink && demoLink.trim()) {
       objectiveScore += 3;
     }
@@ -1649,12 +1665,19 @@ app.post("/api/evaluate/live", async (req, res) => {
     }
 
     // Video check (+2.5 points) - API uses different field names
-    const videoLink = project.presentationLink || project.video || project.data?.presentationLink || project.data?.video || '';
+    const videoLink =
+      project.presentationLink ||
+      project.video ||
+      project.data?.presentationLink ||
+      project.data?.video ||
+      "";
     if (videoLink && videoLink.trim()) {
       objectiveScore += 2.5;
     }
 
-    logger.info(`📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`);
+    logger.info(
+      `📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`,
+    );
 
     // Get AI evaluation using Claude
     const anthropic = new Anthropic({
@@ -1816,6 +1839,21 @@ Respond ONLY with JSON (no markdown, no backticks):
       },
       reasoning: reasoning.reasoning,
       factors: reasoning.factors,
+      _debug: {
+        allKeys: Object.keys(project),
+        urlFields: Object.fromEntries(
+          Object.entries(project).filter(
+            ([k, v]) =>
+              v &&
+              typeof v === "string" &&
+              (v.includes("http") ||
+                v.includes(".app") ||
+                v.includes(".com") ||
+                v.includes("github")),
+          ),
+        ),
+        rawLinks: { githubLink, demoLink, videoLink },
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
