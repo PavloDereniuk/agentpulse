@@ -1,20 +1,40 @@
 /**
  * Analytics Dashboard Component
- * 
+ *
  * Displays comprehensive analytics and insights
  */
 
-import React, { useState, useEffect } from 'react';
-import { 
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
-} from 'recharts';
-import { format } from 'date-fns';
-import './Analytics.css';
+import React, { useState, useEffect } from "react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+import { format } from "date-fns";
+import "./Analytics.css";
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://agentpulse-production-8e01.up.railway.app';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  "https://agentpulse-production-8e01.up.railway.app";
 
-const COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+const COLORS = [
+  "#8b5cf6",
+  "#06b6d4",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#ec4899",
+];
 
 function Analytics() {
   const [overview, setOverview] = useState(null);
@@ -23,34 +43,31 @@ function Analytics() {
   const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [reputationData, setReputationData] = useState(null);
 
   // Fetch all analytics data
   useEffect(() => {
     fetchAnalytics();
-    fetchReputationData();
-    const interval = setInterval(() => {
-      fetchAnalytics();
-      fetchReputationData();
-    }, 30000);
+    const interval = setInterval(fetchAnalytics, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchAnalytics = async () => {
     try {
-      const [overviewRes, votingRes, engagementRes, timelineRes] = await Promise.all([
-        fetch(`${API_BASE}/api/analytics/overview`),
-        fetch(`${API_BASE}/api/analytics/voting`),
-        fetch(`${API_BASE}/api/analytics/engagement`),
-        fetch(`${API_BASE}/api/analytics/timeline`)
-      ]);
+      const [overviewRes, votingRes, engagementRes, timelineRes] =
+        await Promise.all([
+          fetch(`${API_BASE}/api/analytics/overview`),
+          fetch(`${API_BASE}/api/analytics/voting`),
+          fetch(`${API_BASE}/api/analytics/engagement`),
+          fetch(`${API_BASE}/api/analytics/timeline`),
+        ]);
 
-      const [overviewData, votingData, engagementData, timelineData] = await Promise.all([
-        overviewRes.json(),
-        votingRes.json(),
-        engagementRes.json(),
-        timelineRes.json()
-      ]);
+      const [overviewData, votingData, engagementData, timelineData] =
+        await Promise.all([
+          overviewRes.json(),
+          votingRes.json(),
+          engagementRes.json(),
+          timelineRes.json(),
+        ]);
 
       setOverview(overviewData);
       setVoting(votingData);
@@ -58,28 +75,10 @@ function Analytics() {
       setTimeline(timelineData);
       setError(null);
     } catch (err) {
-      console.error('Analytics fetch error:', err);
+      console.error("Analytics fetch error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchReputationData = async () => {
-    try {
-      const [reputationRes, protocolsRes, breakdownRes] = await Promise.all([
-        fetch(`${API_BASE}/api/reputation/503`),
-        fetch(`${API_BASE}/api/reputation/503/protocols`),
-        fetch(`${API_BASE}/api/reputation/503/breakdown`)
-      ]);
-
-      const reputation = await reputationRes.json();
-      const protocols = await protocolsRes.json();
-      const breakdown = await breakdownRes.json();
-
-      setReputationData({ reputation, protocols, breakdown });
-    } catch (error) {
-      console.error('Error fetching reputation:', error);
     }
   };
 
@@ -97,38 +96,40 @@ function Analytics() {
       <div className="analytics-error">
         <span className="error-icon">⚠️</span>
         <p>Failed to load analytics: {error}</p>
-        <button onClick={fetchAnalytics} className="retry-button">Retry</button>
+        <button onClick={fetchAnalytics} className="retry-button">
+          Retry
+        </button>
       </div>
     );
   }
 
   // Prepare chart data
-  const actionDistributionData = overview?.actionDistribution?.map(item => ({
-    name: item.type.replace(/_/g, ' '),
-    value: item.count
-  })) || [];
+  const actionDistributionData =
+    overview?.actionDistribution?.map((item) => ({
+      name: item.type.replace(/_/g, " "),
+      value: item.count,
+    })) || [];
 
-  const scoreDistributionData = voting?.scoreDistribution 
+  const scoreDistributionData = voting?.scoreDistribution
     ? Object.entries(voting.scoreDistribution).map(([score, count]) => ({
         score: `${score}/10`,
-        count
+        count,
       }))
     : [];
 
-  const dailyActivityData = timeline?.daily?.map(day => ({
-    date: format(new Date(day.date), 'MMM dd'),
-    total: day.total,
-    dataCollection: day.breakdown.dataCollection,
-    responses: day.breakdown.commentResponses,
-    spotlights: day.breakdown.spotlights
-  })) || [];
+  const dailyActivityData =
+    timeline?.daily?.map((day) => ({
+      date: format(new Date(day.date), "MMM dd"),
+      total: day.total,
+      dataCollection: day.breakdown.dataCollection,
+      responses: day.breakdown.commentResponses,
+    })) || [];
 
-  const hourlyEngagementData = engagement?.commentsByHour?.map(item => ({
-    hour: `${item.hour}:00`,
-    responses: item.count
-  })) || [];
-
-  
+  const hourlyEngagementData =
+    engagement?.commentsByHour?.map((item) => ({
+      hour: `${item.hour}:00`,
+      responses: item.count,
+    })) || [];
 
   return (
     <div className="analytics-container">
@@ -138,7 +139,9 @@ function Analytics() {
           <span className="title-icon">📊</span>
           Analytics Dashboard
         </h2>
-        <p className="analytics-subtitle">Real-time insights and performance metrics</p>
+        <p className="analytics-subtitle">
+          Real-time insights and performance metrics
+        </p>
       </div>
 
       {/* Overview Cards */}
@@ -147,11 +150,16 @@ function Analytics() {
           <div className="metric-card">
             <div className="metric-icon">🎯</div>
             <div className="metric-content">
-              <span className="metric-value">{overview?.totalActions?.toLocaleString()}</span>
+              <span className="metric-value">
+                {overview?.totalActions?.toLocaleString()}
+              </span>
               <span className="metric-label">Total Actions</span>
             </div>
-            <div className={`metric-change ${overview?.dailyGrowth >= 0 ? 'positive' : 'negative'}`}>
-              {overview?.dailyGrowth >= 0 ? '↗' : '↘'} {Math.abs(overview?.dailyGrowth)}%
+            <div
+              className={`metric-change ${overview?.dailyGrowth >= 0 ? "positive" : "negative"}`}
+            >
+              {overview?.dailyGrowth >= 0 ? "↗" : "↘"}{" "}
+              {Math.abs(overview?.dailyGrowth)}%
             </div>
           </div>
 
@@ -178,22 +186,8 @@ function Analytics() {
               <span className="metric-value">{engagement?.totalResponses}</span>
               <span className="metric-label">Responses</span>
             </div>
-            <div className="metric-detail">{engagement?.uniquePosts} unique posts</div>
-          </div>
-
-          <div className="metric-card">
-            <div className="metric-icon">🔥</div>
-            <div className="metric-content">
-              <span className="metric-value">{overview?.activeHours?.join(', ')}</span>
-              <span className="metric-label">Peak Hours (UTC)</span>
-            </div>
-          </div>
-
-          <div className="metric-card">
-            <div className="metric-icon">📈</div>
-            <div className="metric-content">
-              <span className="metric-value">{overview?.topActionType?.replace(/_/g, ' ')}</span>
-              <span className="metric-label">Top Action</span>
+            <div className="metric-detail">
+              {engagement?.uniquePosts} unique posts
             </div>
           </div>
         </div>
@@ -211,15 +205,33 @@ function Analytics() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" stroke="#9ca3af" />
               <YAxis stroke="#9ca3af" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
-                labelStyle={{ color: '#f9fafb' }}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1f2937",
+                  border: "1px solid #374151",
+                }}
+                labelStyle={{ color: "#f9fafb" }}
               />
               <Legend />
-              <Line type="monotone" dataKey="total" stroke="#8b5cf6" strokeWidth={2} name="Total" />
-              <Line type="monotone" dataKey="dataCollection" stroke="#06b6d4" name="Data Collection" />
-              <Line type="monotone" dataKey="responses" stroke="#10b981" name="Responses" />
-              <Line type="monotone" dataKey="spotlights" stroke="#f59e0b" name="Spotlights" />
+              <Line
+                type="monotone"
+                dataKey="total"
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                name="Total"
+              />
+              <Line
+                type="monotone"
+                dataKey="dataCollection"
+                stroke="#06b6d4"
+                name="Data Collection"
+              />
+              <Line
+                type="monotone"
+                dataKey="responses"
+                stroke="#10b981"
+                name="Responses"
+              />
             </LineChart>
           </ResponsiveContainer>
         </section>
@@ -236,17 +248,25 @@ function Analytics() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) =>
+                  `${name}: ${(percent * 100).toFixed(0)}%`
+                }
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
               >
                 {actionDistributionData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={COLORS[index % COLORS.length]}
+                  />
                 ))}
               </Pie>
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1f2937",
+                  border: "1px solid #374151",
+                }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -262,9 +282,12 @@ function Analytics() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="score" stroke="#9ca3af" />
               <YAxis stroke="#9ca3af" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
-                labelStyle={{ color: '#f9fafb' }}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1f2937",
+                  border: "1px solid #374151",
+                }}
+                labelStyle={{ color: "#f9fafb" }}
               />
               <Bar dataKey="count" fill="#8b5cf6" />
             </BarChart>
@@ -281,9 +304,12 @@ function Analytics() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="hour" stroke="#9ca3af" />
               <YAxis stroke="#9ca3af" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
-                labelStyle={{ color: '#f9fafb' }}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1f2937",
+                  border: "1px solid #374151",
+                }}
+                labelStyle={{ color: "#f9fafb" }}
               />
               <Bar dataKey="responses" fill="#10b981" />
             </BarChart>
@@ -302,25 +328,30 @@ function Analytics() {
             <div className="insight-item">
               <span className="insight-icon">🔥</span>
               <div className="insight-content">
-                <strong>Peak Activity Hours:</strong> {overview?.activeHours?.join(', ')} UTC
+                <strong>Peak Activity Hours:</strong>{" "}
+                {overview?.activeHours?.join(", ")} UTC
               </div>
             </div>
             <div className="insight-item">
               <span className="insight-icon">🎯</span>
               <div className="insight-content">
-                <strong>Success Rate:</strong> {overview?.successRate}% - Excellent performance!
+                <strong>Success Rate:</strong> {overview?.successRate}% -
+                Excellent performance!
               </div>
             </div>
             <div className="insight-item">
               <span className="insight-icon">📊</span>
               <div className="insight-content">
-                <strong>Daily Growth:</strong> {overview?.dailyGrowth >= 0 ? '+' : ''}{overview?.dailyGrowth}%
+                <strong>Daily Growth:</strong>{" "}
+                {overview?.dailyGrowth >= 0 ? "+" : ""}
+                {overview?.dailyGrowth}%
               </div>
             </div>
             <div className="insight-item">
               <span className="insight-icon">🗳️</span>
               <div className="insight-content">
-                <strong>Voting Quality:</strong> Avg score {voting?.avgScore}/10 across {voting?.projectsEvaluated} projects
+                <strong>Voting Quality:</strong> Avg score {voting?.avgScore}/10
+                across {voting?.projectsEvaluated} projects
               </div>
             </div>
           </div>
@@ -336,147 +367,45 @@ function Analytics() {
               <div key={index} className="target-item">
                 <span className="target-rank">#{index + 1}</span>
                 <span className="target-name">@{target.username}</span>
-                <span className="target-count">{target.responses} responses</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Top Projects */}
-        <section className="insights-section full-width-insight">
-          <h3 className="section-title">
-            <span>🏆</span> Top Voted Projects
-          </h3>
-          <div className="projects-list">
-            {voting?.topProjects?.slice(0, 5).map((project, index) => (
-              <div key={index} className="project-item">
-                <div className="project-rank">
-                  {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
-                </div>
-                <div className="project-info">
-                  <div className="project-header">
-                    <span className="project-id">Project #{project.id}</span>
-                    <span className="project-score">{project.score}/10</span>
-                  </div>
-                  <div className="project-breakdown">
-                    <span className="breakdown-item">Obj: {project.objectiveScore}</span>
-                    <span className="breakdown-item">Claude: {project.claudeScore}</span>
-                  </div>
-                  <p className="project-reasoning">{project.reasoning.substring(0, 150)}...</p>
-                </div>
+                <span className="target-count">
+                  {target.responses} responses
+                </span>
               </div>
             ))}
           </div>
         </section>
       </div>
-      {reputationData && (
-        <div className="reputation-section">
-          <h2>🏆 Agent Reputation System</h2>
-          
-          <div className="reputation-overview">
-            <div className="reputation-score-card">
-              <div className="reputation-score-big">
-                {reputationData.reputation.overallReputation}
-                <span>/10</span>
+      {/* Top Projects */}
+      <section className="top-projects-section">
+        <h3 className="section-title">
+          <span>🏆</span> Top Voted Projects
+        </h3>
+        <div className="projects-list">
+          {voting?.topProjects?.slice(0, 5).map((project, index) => (
+            <div key={index} className="project-item">
+              <div className="project-rank">
+                {index === 0
+                  ? "🥇"
+                  : index === 1
+                    ? "🥈"
+                    : index === 2
+                      ? "🥉"
+                      : `#${index + 1}`}
               </div>
-              <div className="reputation-label">Overall Reputation</div>
-              <div className="reputation-subtitle">
-                Protocol-Native Scoring System
-              </div>
-            </div>
-
-            <div className="score-breakdown">
-              <div className="breakdown-item">
-                <div className="breakdown-label">💎 Quality</div>
-                <div className="breakdown-score">
-                  {reputationData.reputation.qualityScore}/10
+              <div className="project-info">
+                <div className="project-header">
+                  <span className="project-id">{project.name}</span>
+                  <span className="project-score">{project.score}/10</span>
                 </div>
-                <div className="breakdown-weight">30% weight</div>
-              </div>
-              <div className="breakdown-item">
-                <div className="breakdown-label">💬 Engagement</div>
-                <div className="breakdown-score">
-                  {reputationData.reputation.engagementScore}/10
-                </div>
-                <div className="breakdown-weight">30% weight</div>
-              </div>
-              <div className="breakdown-item">
-                <div className="breakdown-label">🔗 Protocols</div>
-                <div className="breakdown-score">
-                  {reputationData.breakdown.protocolExpertise.score}/10
-                </div>
-                <div className="breakdown-weight">40% weight</div>
+                <p className="project-reasoning">
+                  {project.reasoning?.substring(0, 150)}...
+                </p>
               </div>
             </div>
-          </div>
-
-          <div className="protocol-usage">
-            <h3>Protocol Ecosystem Integration</h3>
-            <div className="protocol-grid">
-              {reputationData.protocols.map((protocol, idx) => (
-                <div key={idx} className="protocol-card">
-                  <div className="protocol-header">
-                    <span className="protocol-name">{protocol.protocol}</span>
-                    <span className="protocol-score">
-                      {reputationData.reputation[`${protocol.protocol.toLowerCase()}Score`]}/10
-                    </span>
-                  </div>
-                  <div className="protocol-stats">
-                    <div className="protocol-stat">
-                      <span className="stat-label">Transactions</span>
-                      <span className="stat-value">{protocol.count}</span>
-                    </div>
-                    {protocol.volume > 0 && (
-                      <div className="protocol-stat">
-                        <span className="stat-label">Volume</span>
-                        <span className="stat-value">${protocol.volume.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="protocol-description">{protocol.description}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="badges-section">
-            <h3>🏅 Achievement Badges</h3>
-            <div className="badges-grid">
-              {reputationData.reputation.badgesEarned.map((badge, idx) => (
-                <div key={idx} className="badge-card">
-                  <div className="badge-icon">🏅</div>
-                  <div className="badge-name">{badge.type}</div>
-                  <div className="badge-date">
-                    {new Date(badge.earnedAt).toLocaleDateString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="reputation-stats">
-            <div className="stat-item">
-              <div className="stat-value">{reputationData.reputation.totalProtocolsUsed}</div>
-              <div className="stat-label">Protocols Used</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">{reputationData.reputation.totalTransactions}</div>
-              <div className="stat-label">Total Transactions</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">{reputationData.reputation.badgesEarned.length}</div>
-              <div className="stat-label">Badges Earned</div>
-            </div>
-          </div>
-
-          <div className="implementation-note">
-            📝 <strong>Demo Mode:</strong> Showing mock data. Production uses Anchor smart contracts. 
-            Code: <code>/solana-program/agent-reputation/</code>
-          </div>
+          ))}
         </div>
-      )}
+      </section>
     </div>
-    
   );
 }
 

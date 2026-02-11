@@ -812,52 +812,69 @@ app.get("/api/analytics/overview", async (req, res) => {
  */
 app.get("/api/analytics/voting", async (req, res) => {
   try {
-    // Total evaluations and average score
+    // Total evaluations and average score (both tables)
     const statsResult = await db.pool.query(`
       SELECT 
         COUNT(*) as total_evaluations,
         AVG(score) as avg_score,
         MAX(score) as max_score,
         MIN(score) as min_score
-      FROM project_evaluations
+      FROM (
+        SELECT score FROM project_evaluations
+        UNION ALL
+        SELECT score FROM project_votes
+      ) all_votes
     `);
 
-    // Score distribution
+    // Score distribution (both tables)
     const distributionResult = await db.pool.query(`
       SELECT 
         FLOOR(score) as score_bucket,
         COUNT(*) as count
-      FROM project_evaluations
-      WHERE score IS NOT NULL
+      FROM (
+        SELECT score FROM project_evaluations WHERE score IS NOT NULL
+        UNION ALL
+        SELECT score FROM project_votes WHERE score IS NOT NULL
+      ) all_scores
       GROUP BY score_bucket
       ORDER BY score_bucket
     `);
 
-    // Top projects by score
+    // Top projects - combine from both tables, take best score
     const topProjectsResult = await db.pool.query(`
       SELECT 
-        project_id,
-        score,
-        completeness,
-        innovation,
-        technical_quality,
-        ecosystem_value,
-        engagement,
-        reasoning,
-        created_at
-      FROM project_evaluations
-      ORDER BY score DESC
+        combined.project_id,
+        combined.score,
+        combined.reasoning,
+        combined.created_at,
+        combined.source,
+        p.name as project_name,
+        p.slug as project_slug
+      FROM (
+        SELECT project_id, score, reasoning, created_at, 'evaluation' as source
+        FROM project_evaluations
+        UNION ALL
+        SELECT project_id, score, reasoning, created_at, 'vote' as source
+        FROM project_votes
+      ) combined
+      LEFT JOIN projects p ON combined.project_id = p.external_id
+      ORDER BY combined.score DESC
       LIMIT 10
     `);
 
-    // Recent voting activity (last 7 days)
+    // Recent voting activity (last 7 days, both tables)
     const activityResult = await db.pool.query(`
       SELECT 
         DATE(created_at) as date,
         COUNT(*) as votes,
         AVG(score) as avg_score
-      FROM project_evaluations
-      WHERE created_at > NOW() - INTERVAL '7 days'
+      FROM (
+        SELECT created_at, score FROM project_evaluations
+        WHERE created_at > NOW() - INTERVAL '7 days'
+        UNION ALL
+        SELECT created_at, score FROM project_votes
+        WHERE created_at > NOW() - INTERVAL '7 days'
+      ) all_votes
       GROUP BY date
       ORDER BY date
     `);
@@ -877,14 +894,11 @@ app.get("/api/analytics/voting", async (req, res) => {
       }, {}),
       topProjects: topProjectsResult.rows.map((row) => ({
         id: row.project_id,
+        name:
+          row.project_name || row.project_slug || `Project #${row.project_id}`,
+        slug: row.project_slug,
         score: parseFloat(row.score).toFixed(1),
-        breakdown: {
-          completeness: row.completeness,
-          innovation: row.innovation,
-          technicalQuality: row.technical_quality,
-          ecosystemValue: row.ecosystem_value,
-          engagement: row.engagement,
-        },
+        source: row.source,
         reasoning: row.reasoning,
         votedAt: row.created_at,
       })),
@@ -960,7 +974,7 @@ app.get("/api/analytics/engagement", async (req, res) => {
         AND details->>'respondedTo' IS NOT NULL
       GROUP BY username
       ORDER BY responses DESC
-      LIMIT 5
+      LIMIT 7
     `);
 
     const commentStats = commentStatsResult.rows[0];
@@ -1213,7 +1227,7 @@ app.get("/api/proofs/db", async (req, res) => {
 
     // Always get ALL proofs for stats
     const allResult = await db.pool.query(
-      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200"
+      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200",
     );
     const allProofs = allResult.rows;
 
@@ -1222,7 +1236,7 @@ app.get("/api/proofs/db", async (req, res) => {
       total: allProofs.length,
       byType: {},
       averageConfidence: 0,
-      withReasoning: allProofs.filter(p => p.reasoning?.length > 50).length,
+      withReasoning: allProofs.filter((p) => p.reasoning?.length > 50).length,
     };
 
     allProofs.forEach((p) => {
@@ -1232,12 +1246,14 @@ app.get("/api/proofs/db", async (req, res) => {
     const withConfidence = allProofs.filter((p) => p.confidence !== null);
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(1);
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
+        1,
+      );
     }
 
     // Filter for display
-    const filtered = type 
-      ? allProofs.filter(p => p.action_type === type) 
+    const filtered = type
+      ? allProofs.filter((p) => p.action_type === type)
       : allProofs;
 
     // Format for frontend
@@ -1638,7 +1654,9 @@ app.post("/api/evaluate/live", async (req, res) => {
       objectiveScore += 2.5;
     }
 
-    logger.info(`📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`);
+    logger.info(
+      `📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`,
+    );
 
     // Get AI evaluation using Claude
     const anthropic = new Anthropic({
