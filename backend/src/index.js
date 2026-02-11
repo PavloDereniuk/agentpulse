@@ -13,7 +13,10 @@ import dotenv from "dotenv";
 import AutonomousAgent from "./agents/autonomousAgent.js";
 import { SolanaService } from "./services/solanaService.js";
 import { Logger } from "./utils/logger.js";
+import { VotingService } from "./services/votingService.js";
 import mockReputation from "./services/mockReputationService.js";
+import Anthropic from "@anthropic-ai/sdk";
+import { ColosseumAPI } from "./services/colosseumAPI.js";
 import { DatabaseService } from "./services/database.js";
 
 // Load environment variables
@@ -1508,6 +1511,299 @@ app.get("/api/learning/evolution", async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+    });
+  }
+});
+
+// Live evaluation endpoint - REAL-TIME AI evaluation with FRESH API data
+app.post("/api/evaluate/live", async (req, res) => {
+  try {
+    const { projectId, projectName } = req.body;
+    logger.info(`🔴 LIVE evaluation request: ${projectId || projectName}`);
+
+    const colosseumAPI = new ColosseumAPI();
+
+    // Get ALL projects from API with full pagination (useAPI=true)
+    logger.info("📡 Fetching ALL projects from Colosseum API...");
+    const allProjects = await colosseumAPI.getProjects({}, true);
+    logger.info(`✅ Loaded ${allProjects.length} FRESH projects from API`);
+
+    // Find project
+    let project;
+
+    if (projectId) {
+      project = allProjects.find((p) => p.id === parseInt(projectId));
+      logger.info(
+        `🔍 Searching by ID: ${projectId} - ${project ? "✅ FOUND" : "❌ NOT FOUND"}`,
+      );
+    } else if (projectName) {
+      // Exact match
+      project = allProjects.find(
+        (p) => p.name.toLowerCase() === projectName.toLowerCase(),
+      );
+
+      // Partial match
+      if (!project) {
+        project = allProjects.find((p) =>
+          p.name.toLowerCase().includes(projectName.toLowerCase()),
+        );
+      }
+
+      // Slug match
+      if (!project) {
+        project = allProjects.find((p) =>
+          p.slug?.toLowerCase().includes(projectName.toLowerCase()),
+        );
+      }
+
+      logger.info(
+        `🔍 Searching by name: "${projectName}" - ${project ? `✅ FOUND: ${project.name}` : "❌ NOT FOUND"}`,
+      );
+
+      logger.info(`📋 RAW PROJECT DATA:`);
+      logger.info(JSON.stringify(project, null, 2));
+
+      // Log similar if not found
+      if (!project) {
+        const similar = allProjects
+          .filter((p) =>
+            p.name
+              .toLowerCase()
+              .includes(projectName.substring(0, 3).toLowerCase()),
+          )
+          .slice(0, 5)
+          .map((p) => `"${p.name}" (ID: ${p.id})`);
+
+        if (similar.length > 0) {
+          logger.info(`💡 Similar projects: ${similar.join(", ")}`);
+        }
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: "Please provide either projectId or projectName",
+      });
+    }
+
+    if (!project) {
+      return res.json({
+        success: false,
+        error: "Project not found",
+        suggestion: `Searched ${allProjects.length} live projects from Colosseum API. Check spelling or project ID.`,
+      });
+    }
+
+    logger.info(`🧠 Generating LIVE AI evaluation for: ${project.name}`);
+    logger.info(
+      `📝 100% FRESH API DATA - GitHub=${!!project.github}, Demo=${!!project.demo}, Desc=${(project.description || "").length} chars`,
+    );
+
+    // Calculate objective score
+    let objectiveScore = 0;
+
+    // GitHub check (+2 points) - API uses 'repoLink'
+    if (project.repoLink && project.repoLink.trim()) {
+      objectiveScore += 2;
+      logger.info(`✅ GitHub found: +2.0`);
+    }
+
+    // Demo check (+3 points) - API uses 'technicalDemoLink'
+    if (project.technicalDemoLink && project.technicalDemoLink.trim()) {
+      objectiveScore += 3;
+      logger.info(`✅ Demo found: +3.0`);
+    }
+
+    // Description quality (0-2.5 points)
+    const descLength = (project.description || "").length;
+    if (descLength > 500) {
+      objectiveScore += 2.5;
+      logger.info(`✅ Description excellent: +2.5`);
+    } else if (descLength > 200) {
+      objectiveScore += 1.5;
+      logger.info(`✅ Description good: +1.5`);
+    } else if (descLength > 50) {
+      objectiveScore += 0.5;
+      logger.info(`⚠️ Description basic: +0.5`);
+    }
+
+    // Video check (+2.5 points) - API uses 'presentationLink'
+    if (project.presentationLink && project.presentationLink.trim()) {
+      objectiveScore += 2.5;
+      logger.info(`✅ Video found: +2.5`);
+    }
+
+    logger.info(`📊 Objective score: ${objectiveScore}/10`);
+    logger.info("🤖 Calling Claude AI for evaluation...");
+
+    // Get AI evaluation using Claude
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    const prompt = `Evaluate this Solana AI Agent Hackathon project on a scale of 0-10:
+
+Project: ${project.name}
+${project.tagline ? `Tagline: ${project.tagline}` : ""}
+Description: ${project.description || "No description"}
+${project.github ? `GitHub: ${project.github}` : ""}
+${project.demo ? `Demo: ${project.demo}` : ""}
+
+Rate these aspects (0-10 each):
+1. Innovation - How novel and creative is the concept?
+2. Technical Effort - Implementation quality and complexity
+3. Potential Impact - Value to Solana/AI ecosystem
+4. Ecosystem Fit - Alignment with Solana's strengths
+
+Respond ONLY with JSON (no markdown, no backticks):
+{
+  "innovation": 7,
+  "effort": 8,
+  "potential": 7,
+  "ecosystemFit": 9,
+  "overall": 7.75,
+  "reasoning": "Brief explanation"
+}`;
+
+    let aiEval;
+    try {
+      const aiResponse = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const aiText = aiResponse.content[0].text;
+      logger.info("🤖 Claude response:", aiText.substring(0, 200));
+
+      // Clean and parse JSON
+      const cleanedText = aiText.replace(/```json|```/g, "").trim();
+      aiEval = JSON.parse(cleanedText);
+
+      // Validate required fields
+      if (
+        !aiEval.innovation ||
+        !aiEval.effort ||
+        !aiEval.potential ||
+        !aiEval.ecosystemFit
+      ) {
+        throw new Error("Missing required fields in AI response");
+      }
+
+      logger.info(`🤖 AI score: ${aiEval.overall}/10`);
+    } catch (parseError) {
+      logger.error("Failed to parse Claude response:", parseError.message);
+      logger.info("Using fallback evaluation based on objective score");
+
+      // Fallback: create evaluation based on objective metrics
+      const baseScore = Math.min(objectiveScore * 1.2, 10);
+      aiEval = {
+        innovation: parseFloat((baseScore * 0.9).toFixed(1)),
+        effort: parseFloat((baseScore * 1.1).toFixed(1)),
+        potential: parseFloat(baseScore.toFixed(1)),
+        ecosystemFit: parseFloat((baseScore * 1.0).toFixed(1)),
+        overall: parseFloat(baseScore.toFixed(1)),
+        reasoning: `Evaluation based on objective metrics: ${objectiveScore}/10. Project has ${project.github ? "GitHub repository" : "no repository"}, ${project.demo ? "working demo" : "no demo"}, and ${descLength > 200 ? "detailed" : "basic"} description.`,
+      };
+    }
+
+    // Calculate final score (40% objective + 60% AI)
+    const finalScore = objectiveScore * 0.4 + aiEval.overall * 0.6;
+    const confidence =
+      finalScore >= 8
+        ? 0.95
+        : finalScore >= 7
+          ? 0.9
+          : finalScore >= 6
+            ? 0.85
+            : 0.8;
+
+    logger.info(`✅ Final score: ${finalScore.toFixed(1)}/10`);
+
+    // Generate detailed reasoning
+    const reasoning = {
+      reasoning: `=== LIVE AI EVALUATION ===
+
+1. PROJECT OVERVIEW
+   Name: "${project.name}"
+   ${project.tagline ? `Tagline: "${project.tagline}"` : ""}
+   Description: ${descLength} characters
+
+2. OBJECTIVE ANALYSIS (40% weight)
+   Score: ${objectiveScore.toFixed(1)}/10
+   ✓ GitHub Repository: ${project.repoLink ? "✅ YES (+2.0)" : "❌ NO (0.0)"}
+   ✓ Working Demo: ${project.technicalDemoLink ? "✅ YES (+3.0)" : "❌ NO (0.0)"}
+   ✓ Description Quality: ${descLength > 500 ? "Excellent (2.5)" : descLength > 200 ? "Good (1.5)" : descLength > 50 ? "Basic (0.5)" : "Minimal (0.0)"}
+   ✓ Video Demo: ${project.presentationLink ? "✅ YES (+2.5)" : "❌ NO (0.0)"}
+
+3. AI EVALUATION BY CLAUDE (60% weight)
+   Overall Score: ${aiEval.overall}/10
+   Breakdown:
+   • Innovation: ${aiEval.innovation}/10 - ${aiEval.innovation >= 8 ? "Outstanding" : aiEval.innovation >= 7 ? "Excellent" : aiEval.innovation >= 6 ? "Good" : "Average"}
+   • Technical Effort: ${aiEval.effort}/10 - ${aiEval.effort >= 8 ? "Outstanding" : aiEval.effort >= 7 ? "Excellent" : aiEval.effort >= 6 ? "Good" : "Average"}
+   • Potential Impact: ${aiEval.potential}/10 - ${aiEval.potential >= 8 ? "Outstanding" : aiEval.potential >= 7 ? "Excellent" : aiEval.potential >= 6 ? "Good" : "Average"}
+   • Ecosystem Fit: ${aiEval.ecosystemFit}/10 - ${aiEval.ecosystemFit >= 8 ? "Outstanding" : aiEval.ecosystemFit >= 7 ? "Excellent" : aiEval.ecosystemFit >= 6 ? "Good" : "Average"}
+   
+   Claude's Assessment: "${aiEval.reasoning}"
+
+4. FINAL CALCULATION
+   Formula: (Objective × 0.4) + (AI × 0.6)
+   Calculation: (${objectiveScore.toFixed(1)} × 0.4) + (${aiEval.overall} × 0.6)
+   Result: ${finalScore.toFixed(1)}/10
+   
+   Threshold: 5.5/10 (balanced strategy)
+   ${finalScore >= 8.5 ? "⭐ EXCELLENT PROJECT - Strong recommendation!" : finalScore >= 7.0 ? "✅ GOOD PROJECT - Recommended" : finalScore >= 5.5 ? "👍 DECENT PROJECT - Worth supporting" : "❌ BELOW THRESHOLD"}
+
+5. DECISION
+   ${finalScore >= 5.5 ? "✅ RECOMMEND" : "❌ DO NOT RECOMMEND"}
+   Confidence: ${(confidence * 100).toFixed(0)}%
+
+=== END OF EVALUATION ===`,
+
+      factors: {
+        objectiveScore: objectiveScore.toFixed(1),
+        aiScore: aiEval.overall.toFixed(1),
+        finalScore: finalScore.toFixed(1),
+        innovation: aiEval.innovation,
+        effort: aiEval.effort,
+        potential: aiEval.potential,
+        ecosystemFit: aiEval.ecosystemFit,
+        hasGitHub: project.repoLink ? "✅" : "❌",
+        hasDemo: project.technicalDemoLink ? "✅" : "❌",
+        hasVideo: project.presentationLink ? "✅" : "❌",
+        confidence: `${(confidence * 100).toFixed(0)}%`,
+      },
+    };
+
+    res.json({
+      success: true,
+      generated: "LIVE",
+      dataSource: "100% Fresh API Data (Full Pagination)",
+      totalProjectsSearched: allProjects.length,
+      project: {
+        id: project.id,
+        name: project.name,
+        tagline: project.tagline || "N/A",
+        description: (project.description || "").substring(0, 300) + "...",
+      },
+      evaluation: {
+        objectiveScore: parseFloat(objectiveScore.toFixed(1)),
+        aiScore: aiEval.overall,
+        finalScore: parseFloat(finalScore.toFixed(1)),
+        confidence: confidence,
+        recommendation:
+          finalScore >= 5.5 ? (finalScore >= 8.5 ? "STRONG_YES" : "YES") : "NO",
+        breakdown: aiEval,
+      },
+      reasoning: reasoning.reasoning,
+      factors: reasoning.factors,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Live evaluation failed:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      hint: "Could not fetch live data from Colosseum API",
     });
   }
 });

@@ -14,6 +14,7 @@ import Proof from "./components/Proof";
 import Analytics from "./components/Analytics";
 import NetworkGraph from "./components/NetworkGraph";
 import Learning from "./components/Learning";
+import Evaluator from "./components/Evaluator";
 import "./App.css";
 
 const API_BASE =
@@ -129,6 +130,12 @@ function App() {
               onClick={() => setCurrentTab("learning")}
             >
               🧠 Learning
+            </button>
+            <button
+              className={`nav-tab ${currentTab === "evaluator" ? "active" : ""}`}
+              onClick={() => setCurrentTab("evaluator")}
+            >
+              🤖 AI Evaluator
             </button>
           </div>
         </div>
@@ -403,6 +410,8 @@ function App() {
         {currentTab === "network" && <NetworkGraph />}
         {/* Learning Tab */}
         {currentTab === "learning" && <Learning />}
+        {/* Evaluator Tab */}
+        {currentTab === "evaluator" && <Evaluator />}
       </main>
 
       {/* Footer */}
