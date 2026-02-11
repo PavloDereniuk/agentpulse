@@ -34,7 +34,7 @@ export class LeaderboardService {
    */
   async getLeaderboard() {
     try {
-      const projects = await this.api.getProjects();
+      const projects = await this.api.getProjects({}, true);
 
       const ranked = projects.map((p) => {
         const totalVotes = (p.humanUpvotes || 0) + (p.agentUpvotes || 0);
@@ -55,10 +55,10 @@ export class LeaderboardService {
           agentVotes: p.agentUpvotes || 0,
           completeness,
           agentPulseScore,
-          hasDemo: !!p.presentationLink,
-          hasGithub: !!p.repoLink,
-          demoUrl: p.presentationLink,
-          githubUrl: p.repoLink,
+          hasDemo: !!(p.presentationLink || p.technicalDemoLink || p.liveAppLink || p.demoUrl || p.demo),
+          hasGithub: !!(p.repoLink || p.githubUrl || p.github),
+          demoUrl: p.presentationLink || p.technicalDemoLink || p.liveAppLink || p.demoUrl || p.demo,
+          githubUrl: p.repoLink || p.githubUrl || p.github,
         };
       });
 
@@ -262,10 +262,10 @@ export class LeaderboardService {
     else if (project.description?.length > 20) score += 1;
 
     // Demo/Presentation (2pts)
-    if (project.presentationLink) score += 2;
+    if (project.presentationLink || project.technicalDemoLink || project.liveAppLink || project.demoUrl || project.demo) score += 2;
 
     // GitHub (2pts)
-    if (project.repoLink) score += 2;
+    if (project.repoLink || project.githubUrl || project.github) score += 2;
 
     return score / maxScore;
   }
