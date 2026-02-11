@@ -1803,6 +1803,212 @@ app.get("/api/ecosystem-stats", async (req, res) => {
   }
 });
 
+// ===== INTEGRATION APIs FOR OTHER AGENTS =====
+
+// Get reputation for any agent
+app.get("/api/reputation/:agentId", async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    logger.info(`Reputation query for agent ${agentId}`);
+
+    // Get agent's forum activity
+    const forumActivity = await db.pool.query(
+      `
+      SELECT 
+        COUNT(*) as post_count,
+        SUM(upvotes) as total_upvotes,
+        AVG(upvotes) as avg_upvotes
+      FROM forum_posts
+      WHERE agent_id = $1
+    `,
+      [agentId],
+    );
+
+    // Get reasoning data if available (for AgentPulse itself)
+    const reasoning = await db.pool.query(`
+      SELECT 
+        COUNT(*) as total_actions,
+        AVG(confidence) as avg_confidence,
+        COUNT(*) FILTER (WHERE confidence >= 0.9) as high_confidence_count
+      FROM action_reasoning
+    `);
+
+    const activity = forumActivity.rows[0];
+    const reasoningData = reasoning.rows[0];
+
+    // Calculate reputation score (0-100)
+    const postScore = Math.min(parseInt(activity.post_count) || 0, 50);
+    const upvoteScore = Math.min(
+      (parseInt(activity.total_upvotes) || 0) / 2,
+      30,
+    );
+    const confidenceScore =
+      parseInt(agentId) === 503
+        ? (parseFloat(reasoningData.avg_confidence) || 0) * 20
+        : 0;
+
+    const reputation = Math.min(postScore + upvoteScore + confidenceScore, 100);
+    const trustScore =
+      parseInt(agentId) === 503
+        ? parseFloat(reasoningData.avg_confidence) || 0
+        : Math.min(reputation / 100, 1);
+
+    res.json({
+      success: true,
+      agentId: parseInt(agentId),
+      reputation: Math.round(reputation),
+      trustScore: parseFloat(trustScore.toFixed(2)),
+      metrics: {
+        totalActions:
+          parseInt(agentId) === 503
+            ? parseInt(reasoningData.total_actions)
+            : parseInt(activity.post_count),
+        highConfidenceRate:
+          parseInt(agentId) === 503
+            ? parseFloat(
+                (
+                  parseInt(reasoningData.high_confidence_count) /
+                  parseInt(reasoningData.total_actions)
+                ).toFixed(2),
+              )
+            : 0,
+        communityUpvotes: parseInt(activity.total_upvotes) || 0,
+        avgUpvotesPerPost: parseFloat(activity.avg_upvotes).toFixed(1) || 0,
+      },
+      dataSource:
+        parseInt(agentId) === 503 ? "autonomous_reasoning" : "forum_activity",
+      lastUpdated: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Reputation query failed:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Get project evaluation
+app.get("/api/evaluate/project/:projectId", async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    logger.info(`Project evaluation query for ${projectId}`);
+
+    // Get our vote/evaluation
+    const vote = await db.pool.query(
+      `
+      SELECT 
+        project_name,
+        score,
+        reasoning
+      FROM project_votes
+      WHERE project_id = $1
+      LIMIT 1
+    `,
+      [projectId],
+    );
+
+    // Get reasoning details
+    const reasoning = await db.pool.query(
+      `
+      SELECT 
+        confidence,
+        reasoning,
+        factors
+      FROM action_reasoning
+      WHERE action_hash LIKE '%' || $1 || '%'
+      AND action_type = 'VOTE_CAST'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+      [projectId],
+    );
+
+    if (vote.rows.length === 0) {
+      return res.json({
+        success: true,
+        projectId: parseInt(projectId),
+        evaluated: false,
+        message: "Project not yet evaluated by AgentPulse",
+      });
+    }
+
+    const voteData = vote.rows[0];
+    const reasoningData = reasoning.rows[0] || {};
+    const score = parseFloat(voteData.score);
+
+    // Determine recommendation
+    let recommendation = "NEUTRAL";
+    if (score >= 9.0) recommendation = "STRONG_YES";
+    else if (score >= 7.5) recommendation = "YES";
+    else if (score < 6.0) recommendation = "NO";
+
+    res.json({
+      success: true,
+      projectId: parseInt(projectId),
+      projectName: voteData.project_name,
+      evaluated: true,
+      score: parseFloat(score.toFixed(1)),
+      confidence: reasoningData.confidence || 0.85,
+      reasoning:
+        reasoningData.reasoning ||
+        voteData.reasoning ||
+        "Evaluation based on objective and AI criteria",
+      recommendation: recommendation,
+      factors: reasoningData.factors || {},
+      evaluatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Project evaluation failed:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Integration info endpoint
+app.get("/api/integration/info", async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      service: "AgentPulse Integration API",
+      version: "1.0.0",
+      endpoints: [
+        {
+          path: "/api/reputation/:agentId",
+          method: "GET",
+          description: "Get reputation and trust metrics for any agent",
+        },
+        {
+          path: "/api/evaluate/project/:projectId",
+          method: "GET",
+          description: "Get AI-powered evaluation of a project",
+        },
+        {
+          path: "/api/network/graph",
+          method: "GET",
+          description: "Get network analysis and agent relationships",
+        },
+        {
+          path: "/api/learning/stats",
+          method: "GET",
+          description: "Get learning and evolution metrics",
+        },
+      ],
+      skillFile:
+        "https://github.com/PavloDereniuk/agentpulse/blob/main/skills/agentpulse.json",
+      documentation: "https://github.com/PavloDereniuk/agentpulse#integration",
+    });
+  } catch (error) {
+    logger.error("Integration info failed:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 /**
  * GET /api/forum-activity
  * Recent forum posts and engagement metrics
