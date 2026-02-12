@@ -541,12 +541,25 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
         )
       `);
 
-      // Ensure column exists (may be missing from older table)
+      // Ensure columns exist
       await this.db.pool
         .query(
           `
-        ALTER TABLE project_evaluations 
-        ADD COLUMN IF NOT EXISTS should_vote BOOLEAN
+        ALTER TABLE project_evaluations ADD COLUMN IF NOT EXISTS should_vote BOOLEAN
+      `,
+        )
+        .catch(() => {});
+      await this.db.pool
+        .query(
+          `
+        ALTER TABLE project_evaluations ADD COLUMN IF NOT EXISTS final_score FLOAT
+      `,
+        )
+        .catch(() => {});
+      await this.db.pool
+        .query(
+          `
+        ALTER TABLE project_evaluations ALTER COLUMN score DROP NOT NULL
       `,
         )
         .catch(() => {});
@@ -554,19 +567,22 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
       await this.db.pool.query(
         `
   INSERT INTO project_evaluations 
-  (project_id, objective_score, claude_score, reasoning, should_vote)
-  VALUES ($1, $2, $3, $4, $5)
+  (project_id, objective_score, claude_score, final_score, score, reasoning, should_vote)
+  VALUES ($1, $2, $3, $4, $4, $5, $6)
   ON CONFLICT (project_id) DO UPDATE SET
     objective_score = $2,
     claude_score = $3,
-    reasoning = $4,
-    should_vote = $5,
+    final_score = $4,
+    score = $4,
+    reasoning = $5,
+    should_vote = $6,
     created_at = NOW()
 `,
         [
           projectId,
           evaluation.objectiveScore,
           evaluation.claudeScore,
+          evaluation.finalScore,
           evaluation.reasoning,
           evaluation.shouldVote,
         ],
