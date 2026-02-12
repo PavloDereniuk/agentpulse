@@ -894,7 +894,8 @@ app.get("/api/analytics/voting", async (req, res) => {
       }, {}),
       topProjects: topProjectsResult.rows.map((row) => ({
         id: row.project_id,
-        name: row.project_name || row.project_slug || `Project #${row.project_id}`,
+        name:
+          row.project_name || row.project_slug || `Project #${row.project_id}`,
         slug: row.project_slug,
         score: parseFloat(row.score).toFixed(1),
         source: row.source,
@@ -1226,7 +1227,7 @@ app.get("/api/proofs/db", async (req, res) => {
 
     // Always get ALL proofs for stats
     const allResult = await db.pool.query(
-      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200"
+      "SELECT * FROM action_reasoning ORDER BY created_at DESC LIMIT 200",
     );
     const allProofs = allResult.rows;
 
@@ -1235,7 +1236,7 @@ app.get("/api/proofs/db", async (req, res) => {
       total: allProofs.length,
       byType: {},
       averageConfidence: 0,
-      withReasoning: allProofs.filter(p => p.reasoning?.length > 50).length,
+      withReasoning: allProofs.filter((p) => p.reasoning?.length > 50).length,
     };
 
     allProofs.forEach((p) => {
@@ -1245,12 +1246,14 @@ app.get("/api/proofs/db", async (req, res) => {
     const withConfidence = allProofs.filter((p) => p.confidence !== null);
     if (withConfidence.length > 0) {
       const sum = withConfidence.reduce((acc, p) => acc + p.confidence, 0);
-      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(1);
+      stats.averageConfidence = ((sum / withConfidence.length) * 100).toFixed(
+        1,
+      );
     }
 
     // Filter for display
-    const filtered = type 
-      ? allProofs.filter(p => p.action_type === type) 
+    const filtered = type
+      ? allProofs.filter((p) => p.action_type === type)
       : allProofs;
 
     // Format for frontend
@@ -1622,7 +1625,7 @@ app.post("/api/evaluate/live", async (req, res) => {
     }
 
     logger.info(`🧠 Evaluating: ${project.name} (ID: ${project.id})`);
-    
+
     // Fetch full project details by slug (list API doesn't include demo/video links)
     if (project.slug) {
       try {
@@ -1630,17 +1633,31 @@ app.post("/api/evaluate/live", async (req, res) => {
         if (fullProject) {
           // Merge full details into project
           Object.assign(project, fullProject);
-          logger.info(`📋 Enriched project with slug data: ${Object.keys(fullProject).join(', ')}`);
+          logger.info(
+            `📋 Enriched project with slug data: ${Object.keys(fullProject).join(", ")}`,
+          );
         }
       } catch (e) {
-        logger.warn(`Could not fetch full project details for slug "${project.slug}": ${e.message}`);
+        logger.warn(
+          `Could not fetch full project details for slug "${project.slug}": ${e.message}`,
+        );
       }
     }
     // Calculate objective score
     let objectiveScore = 0;
 
     // GitHub check (+1.5 points)
-    const githubLink = project.repoLink || project.repo_link || project.github || project.githubUrl || project.github_url || project.githubLink || project.github_link || project.data?.repoLink || project.data?.github || '';
+    const githubLink =
+      project.repoLink ||
+      project.repo_link ||
+      project.github ||
+      project.githubUrl ||
+      project.github_url ||
+      project.githubLink ||
+      project.github_link ||
+      project.data?.repoLink ||
+      project.data?.github ||
+      "";
     if (githubLink && githubLink.trim()) {
       objectiveScore += 1.5;
     }
@@ -1656,42 +1673,129 @@ app.post("/api/evaluate/live", async (req, res) => {
     }
 
     // Problem & Audience (+1.5 points)
-    const hasProblem = project.problemStatement && project.problemStatement.length > 30;
-    const hasAudience = project.targetAudience && project.targetAudience.length > 20;
+    const hasProblem =
+      project.problemStatement && project.problemStatement.length > 30;
+    const hasAudience =
+      project.targetAudience && project.targetAudience.length > 20;
     if (hasProblem) objectiveScore += 0.75;
     if (hasAudience) objectiveScore += 0.75;
 
     // Technical Approach / Solution (+1.5 points)
-    const hasTechnical = project.technicalApproach && project.technicalApproach.length > 50;
+    const hasTechnical =
+      project.technicalApproach && project.technicalApproach.length > 50;
     if (hasTechnical) objectiveScore += 1.5;
-    else if (project.technicalApproach && project.technicalApproach.length > 20) objectiveScore += 0.75;
+    else if (project.technicalApproach && project.technicalApproach.length > 20)
+      objectiveScore += 0.75;
 
     // Business Case (+1 point)
-    const hasBusiness = project.businessModel && project.businessModel.length > 20;
-    const hasCompetitive = project.competitiveLandscape && project.competitiveLandscape.length > 20;
+    const hasBusiness =
+      project.businessModel && project.businessModel.length > 20;
+    const hasCompetitive =
+      project.competitiveLandscape && project.competitiveLandscape.length > 20;
     const hasFuture = project.futureVision && project.futureVision.length > 20;
     if (hasBusiness) objectiveScore += 0.4;
     if (hasCompetitive) objectiveScore += 0.3;
     if (hasFuture) objectiveScore += 0.3;
 
     // Live App / Demo (+1.5 points)
-    const demoLink = project.liveAppLink || project.technicalDemoLink || project.presentationLink || '';
+    const demoLink =
+      project.liveAppLink ||
+      project.technicalDemoLink ||
+      project.presentationLink ||
+      "";
     if (demoLink && demoLink.trim()) {
       objectiveScore += 1.0;
-      if (demoLink.includes("vercel") || demoLink.includes("netlify") || demoLink.includes("railway") || demoLink.includes(".app")) {
+      if (
+        demoLink.includes("vercel") ||
+        demoLink.includes("netlify") ||
+        demoLink.includes("railway") ||
+        demoLink.includes(".app")
+      ) {
         objectiveScore += 0.5;
       }
     }
 
     // Video (+1.5 points)
-    const videoLink = project.presentationLink || project.presentation_link || project.video || project.videoUrl || project.video_url || project.data?.presentationLink || project.data?.video || '';
+    const videoLink =
+      project.presentationLink ||
+      project.presentation_link ||
+      project.video ||
+      project.videoUrl ||
+      project.video_url ||
+      project.data?.presentationLink ||
+      project.data?.video ||
+      "";
     if (videoLink && videoLink.trim()) {
       objectiveScore += 1.5;
     }
 
     objectiveScore = Math.min(objectiveScore, 10);
 
-    logger.info(`📊 ${project.name}: objective=${objectiveScore.toFixed(1)}/10, calling Claude...`);
+    logger.info(
+      `📊 ${project.name}: objective=${objectiveScore.toFixed(1)}/10, calling Claude...`,
+    );
+
+    // Get AI evaluation using Claude
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    const prompt = `Evaluate this Solana AI Agent Hackathon project on a scale of 0-10:
+
+Project: ${project.name}
+${project.tagline ? `Tagline: ${project.tagline}` : ""}
+Description: ${project.description || "No description"}
+${project.problemStatement ? `Problem Statement: ${project.problemStatement}` : ""}
+${project.technicalApproach ? `Technical Approach: ${project.technicalApproach}` : ""}
+${project.targetAudience ? `Target Audience: ${project.targetAudience}` : ""}
+${project.businessModel ? `Business Model: ${project.businessModel}` : ""}
+${project.competitiveLandscape ? `Competitive Landscape: ${project.competitiveLandscape}` : ""}
+${project.futureVision ? `Future Vision: ${project.futureVision}` : ""}
+${project.solanaIntegration ? `Solana Integration: ${project.solanaIntegration}` : ""}
+${githubLink ? `GitHub: ${githubLink}` : ""}
+${demoLink ? `Demo: ${demoLink}` : ""}
+
+Rate these aspects (0-10 each):
+1. Innovation - How novel and creative is the concept?
+2. Technical Effort - Implementation quality and complexity
+3. Potential Impact - Value to Solana/AI ecosystem
+4. Ecosystem Fit - Alignment with Solana's strengths
+
+Respond ONLY with JSON (no markdown, no backticks):
+{
+  "innovation": 7,
+  "effort": 8,
+  "potential": 7,
+  "ecosystemFit": 9,
+  "overall": 7.75,
+  "reasoning": "Brief explanation"
+}`;
+
+    let aiEval;
+    try {
+      const aiResponse = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const aiText = aiResponse.content[0].text;
+
+      // Clean and parse JSON
+      const cleanedText = aiText.replace(/```json|```/g, "").trim();
+      aiEval = JSON.parse(cleanedText);
+
+      // Validate required fields
+      if (
+        !aiEval.innovation ||
+        !aiEval.effort ||
+        !aiEval.potential ||
+        !aiEval.ecosystemFit
+      ) {
+        throw new Error("Missing required fields in AI response");
+      }
+
+      logger.info(`🤖 AI score: ${aiEval.overall}/10`);
     } catch (parseError) {
       logger.error("Failed to parse Claude response:", parseError.message);
       logger.info("Using fallback evaluation based on objective score");
@@ -1710,7 +1814,7 @@ app.post("/api/evaluate/live", async (req, res) => {
 
     // Calculate final score (40% objective + 60% AI)
     // Normalize objective to /10 scale (max raw = 7)
-     const objectiveNormalized = Math.min(objectiveScore, 10);
+    const objectiveNormalized = Math.min(objectiveScore, 10);
     const finalScore = objectiveNormalized * 0.4 + aiEval.overall * 0.6;
     const confidence =
       finalScore >= 8
@@ -1724,7 +1828,7 @@ app.post("/api/evaluate/live", async (req, res) => {
     logger.info(`✅ Final score: ${finalScore.toFixed(1)}/10`);
 
     // Generate detailed reasoning
-      const reasoning = {
+    const reasoning = {
       reasoning: `=== LIVE AI EVALUATION ===
 
 1. PROJECT OVERVIEW
@@ -1962,36 +2066,22 @@ app.post("/api/agent-insights", async (req, res) => {
     const insightGen = new (
       await import("./services/insightGenerator.js")
     ).InsightGenerator();
-     const prompt = `Evaluate this Solana AI Agent Hackathon project on a scale of 0-10:
+    const prompt = `Analyze this AI agent project from the Colosseum Hackathon:
 
 Project: ${project.name}
-${project.tagline ? `Tagline: ${project.tagline}` : ""}
 Description: ${project.description || "No description"}
-${project.problemStatement ? `Problem Statement: ${project.problemStatement}` : ""}
-${project.technicalApproach ? `Technical Approach: ${project.technicalApproach}` : ""}
-${project.targetAudience ? `Target Audience: ${project.targetAudience}` : ""}
-${project.businessModel ? `Business Model: ${project.businessModel}` : ""}
-${project.competitiveLandscape ? `Competitive Landscape: ${project.competitiveLandscape}` : ""}
-${project.futureVision ? `Future Vision: ${project.futureVision}` : ""}
-${project.solanaIntegration ? `Solana Integration: ${project.solanaIntegration}` : ""}
-${githubLink ? `GitHub: ${githubLink}` : ""}
-${demoLink ? `Demo: ${demoLink}` : ""}
+Votes: ${project.voteCount || 0}
+Has Demo: ${project.presentationLink ? "Yes" : "No"}
+Has GitHub: ${project.repoLink ? "Yes" : "No"}
+Focus: ${focusArea}
 
-Rate these aspects (0-10 each):
-1. Innovation - How novel and creative is the concept?
-2. Technical Effort - Implementation quality and complexity
-3. Potential Impact - Value to Solana/AI ecosystem
-4. Ecosystem Fit - Alignment with Solana's strengths
+Provide a ${focusArea} analysis including:
+1. Quality score (1-10)
+2. Key strengths (3-5 points)
+3. Potential concerns (2-3 points)
+4. Brief overall assessment (2-3 sentences)
 
-Respond ONLY with JSON (no markdown, no backticks):
-{
-  "innovation": 7,
-  "effort": 8,
-  "potential": 7,
-  "ecosystemFit": 9,
-  "overall": 7.75,
-  "reasoning": "Brief explanation"
-}`;
+Format as JSON: {score, strengths: [], concerns: [], analysis}`;
 
     const insight = await insightGen.generateInsight(prompt);
 
