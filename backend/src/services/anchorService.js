@@ -1,9 +1,9 @@
 /**
  * Anchor Service - On-chain evaluation & vote recording
- * 
+ *
  * Uses AgentPulse's custom Solana program to store
  * structured evaluation data in PDA accounts.
- * 
+ *
  * Program: 61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW
  */
 import { Program, AnchorProvider, Wallet } from "@coral-xyz/anchor";
@@ -17,7 +17,9 @@ import { Logger } from "../utils/logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const PROGRAM_ID = new PublicKey("61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW");
+const PROGRAM_ID = new PublicKey(
+  "61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW",
+);
 
 export class AnchorService {
   constructor() {
@@ -41,7 +43,7 @@ export class AnchorService {
       const keypair = Keypair.fromSecretKey(secretKey);
       this.wallet = new Wallet(keypair);
 
-      const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+      const rpcUrl = "https://api.devnet.solana.com";
       const connection = new Connection(rpcUrl, "confirmed");
       const provider = new AnchorProvider(connection, this.wallet, {
         commitment: "confirmed",
@@ -52,7 +54,9 @@ export class AnchorService {
 
       this.program = new Program(idl, provider);
       this.ready = true;
-      this.logger.info(`✅ Anchor service initialized - Program: ${PROGRAM_ID.toString().slice(0, 16)}...`);
+      this.logger.info(
+        `✅ Anchor service initialized - Program: ${PROGRAM_ID.toString().slice(0, 16)}...`,
+      );
       this.logger.info(`   Wallet: ${keypair.publicKey.toString()}`);
       return true;
     } catch (error) {
@@ -67,7 +71,9 @@ export class AnchorService {
 
     try {
       const reasoningHash = Array.from(
-        createHash("sha256").update(reasoning || "no reasoning").digest()
+        createHash("sha256")
+          .update(reasoning || "no reasoning")
+          .digest(),
       );
 
       const scoreU16 = Math.round(Math.min(100, Math.max(0, score * 10)));
@@ -80,13 +86,21 @@ export class AnchorService {
           this.wallet.publicKey.toBuffer(),
           Buffer.from(new Uint32Array([projectId]).buffer),
         ],
-        PROGRAM_ID
+        PROGRAM_ID,
       );
 
-      this.logger.info(`Recording evaluation on-chain: ${name} (ID: ${projectId})`);
+      this.logger.info(
+        `Recording evaluation on-chain: ${name} (ID: ${projectId})`,
+      );
 
       const tx = await this.program.methods
-        .recordEvaluation(projectId, name, scoreU16, confidenceU16, reasoningHash)
+        .recordEvaluation(
+          projectId,
+          name,
+          scoreU16,
+          confidenceU16,
+          reasoningHash,
+        )
         .accounts({
           evaluation: evalPda,
           authority: this.wallet.publicKey,
@@ -105,7 +119,9 @@ export class AnchorService {
     } catch (error) {
       this.stats.errors++;
       if (error.message?.includes("already in use")) {
-        this.logger.info(`Project ${projectId} already has on-chain evaluation`);
+        this.logger.info(
+          `Project ${projectId} already has on-chain evaluation`,
+        );
         return { alreadyExists: true };
       }
       this.logger.error(`Anchor evaluation failed: ${error.message}`);
@@ -118,7 +134,9 @@ export class AnchorService {
 
     try {
       const reasoningHash = Array.from(
-        createHash("sha256").update(reasoning || "vote").digest()
+        createHash("sha256")
+          .update(reasoning || "vote")
+          .digest(),
       );
 
       const vType = voteType === "downvote" ? 2 : 1;
@@ -129,7 +147,7 @@ export class AnchorService {
           this.wallet.publicKey.toBuffer(),
           Buffer.from(new Uint32Array([projectId]).buffer),
         ],
-        PROGRAM_ID
+        PROGRAM_ID,
       );
 
       this.logger.info(`Recording vote on-chain: project ${projectId}`);
@@ -172,10 +190,11 @@ export class AnchorService {
           this.wallet.publicKey.toBuffer(),
           Buffer.from(new Uint32Array([projectId]).buffer),
         ],
-        PROGRAM_ID
+        PROGRAM_ID,
       );
 
-      const account = await this.program.account.evaluationRecord.fetch(evalPda);
+      const account =
+        await this.program.account.evaluationRecord.fetch(evalPda);
       return {
         projectId: account.projectId,
         projectName: account.projectName,
@@ -190,6 +209,10 @@ export class AnchorService {
   }
 
   getStats() {
-    return { ...this.stats, ready: this.ready, programId: PROGRAM_ID.toString() };
+    return {
+      ...this.stats,
+      ready: this.ready,
+      programId: PROGRAM_ID.toString(),
+    };
   }
 }
