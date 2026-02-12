@@ -113,6 +113,7 @@ export class VotingService {
       // Evaluate and vote
       for (const project of projects) {
         if (voted >= remainingVotes) break;
+        if (evaluated >= (this.config.maxVotesPerCycle || 5) * 5) break;
         if (voted >= (this.config.maxVotesPerCycle || 5)) break;
 
         // Skip own project
