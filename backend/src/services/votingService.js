@@ -568,20 +568,21 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
         `
   INSERT INTO project_evaluations 
   (project_id, objective_score, claude_score, final_score, score, reasoning, should_vote)
-  VALUES ($1, $2, $3, $4, $4, $5, $6)
+  VALUES ($1, $2, $3, $4, $5, $6, $7)
   ON CONFLICT (project_id) DO UPDATE SET
     objective_score = $2,
     claude_score = $3,
     final_score = $4,
-    score = $4,
-    reasoning = $5,
-    should_vote = $6,
+    score = $5,
+    reasoning = $6,
+    should_vote = $7,
     created_at = NOW()
 `,
         [
           projectId,
           evaluation.objectiveScore,
           evaluation.claudeScore,
+          evaluation.finalScore,
           evaluation.finalScore,
           evaluation.reasoning,
           evaluation.shouldVote,
