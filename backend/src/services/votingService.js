@@ -43,7 +43,7 @@ export class VotingService {
 
     // Config
     this.config = {
-      maxVotesPerDay: 50,
+      maxVotesPerDay: 150,
       minScoreToVote: 5.5,
       excellenceThreshold: 7.5,
       skipOwnProject: true,
