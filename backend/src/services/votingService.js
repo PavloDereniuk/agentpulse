@@ -553,6 +553,16 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
         )
       `);
 
+      // Ensure column exists (may be missing from older table)
+      await this.db.pool
+        .query(
+          `
+        ALTER TABLE project_evaluations 
+        ADD COLUMN IF NOT EXISTS should_vote BOOLEAN
+      `,
+        )
+        .catch(() => {});
+
       await this.db.pool.query(
         `
   INSERT INTO project_evaluations 
@@ -573,6 +583,39 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
           evaluation.shouldVote,
         ],
       );
+
+      // Record on-chain via Anchor program
+      if (this.anchor?.ready) {
+        try {
+          const confidence = evaluation.breakdown?.claude
+            ? Math.round(
+                ((evaluation.breakdown.innovation +
+                  evaluation.breakdown.effort +
+                  evaluation.breakdown.potential +
+                  evaluation.breakdown.fit) /
+                  4) *
+                  10,
+              )
+            : 70;
+          const anchorResult = await this.anchor.recordEvaluation(
+            projectId,
+            evaluation.projectName || `Project-${projectId}`,
+            evaluation.finalScore,
+            confidence,
+            evaluation.reasoning,
+          );
+          if (anchorResult?.signature) {
+            this.logger.info(
+              `🔗 Anchor evaluation: ${anchorResult.explorerUrl}`,
+            );
+          }
+        } catch (anchorErr) {
+          this.logger.warn(
+            "Anchor evaluation failed (non-critical):",
+            anchorErr.message,
+          );
+        }
+      }
     } catch (error) {
       this.logger.error("Failed to store evaluation:", error.message);
     }
