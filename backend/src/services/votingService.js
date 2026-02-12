@@ -206,19 +206,47 @@ export class VotingService {
     if (project.name && project.name.length > 3) score += 0.5;
     if (project.tagline && project.tagline.length > 20) score += 0.5;
 
-    // 2. Description quality (2.5 points)
+    // 2. Description quality (1.5 points)
     if (project.description) {
-      if (project.description.length > 300) score += 2.5;
-      else if (project.description.length > 150) score += 1.5;
-      else if (project.description.length > 50) score += 0.5;
+      if (project.description.length > 300) score += 1.5;
+      else if (project.description.length > 100) score += 1.0;
+      else if (project.description.length > 30) score += 0.5;
     }
 
-    // 3. Demo/deployment (3 points - most important!)
-    if (project.technicalDemoLink || project.presentationLink) {
-      score += 2.0;
-      // Bonus for deployed apps (not just GitHub links)
+    // 3. Problem & Audience (1.5 points)
+    if (project.problemStatement && project.problemStatement.length > 30)
+      score += 0.75;
+    if (project.targetAudience && project.targetAudience.length > 20)
+      score += 0.75;
+
+    // 4. Solution / Technical Approach (1.5 points)
+    if (project.technicalApproach && project.technicalApproach.length > 50)
+      score += 1.5;
+    else if (project.technicalApproach && project.technicalApproach.length > 20)
+      score += 0.75;
+
+    // 5. Business Case (1 point)
+    if (project.businessModel && project.businessModel.length > 20)
+      score += 0.5;
+    if (
+      project.competitiveLandscape &&
+      project.competitiveLandscape.length > 20
+    )
+      score += 0.25;
+    if (project.futureVision && project.futureVision.length > 20) score += 0.25;
+
+    // 6. Demo/deployment (1.5 points)
+    if (
+      project.liveAppLink ||
+      project.technicalDemoLink ||
+      project.presentationLink
+    ) {
+      score += 1.0;
       const demoLink =
-        project.technicalDemoLink || project.presentationLink || "";
+        project.liveAppLink ||
+        project.technicalDemoLink ||
+        project.presentationLink ||
+        "";
       if (
         demoLink.includes("vercel") ||
         demoLink.includes("netlify") ||
@@ -227,23 +255,22 @@ export class VotingService {
         demoLink.includes(".xyz") ||
         demoLink.includes(".com")
       ) {
-        score += 1.0;
-      }
-    }
-
-    // 4. GitHub repository (2 points)
-    if (project.repoLink) {
-      score += 1.5;
-      // Bonus if not a placeholder
-      if (
-        !project.repoLink.includes("github.com/user") &&
-        !project.repoLink.includes("github.com/example")
-      ) {
         score += 0.5;
       }
     }
 
-    // 5. Video demo (1 point)
+    // 7. GitHub repository (1 point)
+    if (project.repoLink) {
+      score += 0.75;
+      if (
+        !project.repoLink.includes("github.com/user") &&
+        !project.repoLink.includes("github.com/example")
+      ) {
+        score += 0.25;
+      }
+    }
+
+    // 8. Video/presentation (1 point)
     if (project.presentationLink) score += 1.0;
 
     return Math.min(score, 10);
@@ -261,15 +288,22 @@ Project Details:
 - Name: ${project.name}
 - Tagline: ${project.tagline || "N/A"}
 - Description: ${project.description || "N/A"}
+- Problem Statement: ${project.problemStatement || "N/A"}
+- Technical Approach: ${project.technicalApproach || "N/A"}
+- Target Audience: ${project.targetAudience || "N/A"}
+- Business Model: ${project.businessModel || "N/A"}
+- Competitive Landscape: ${project.competitiveLandscape || "N/A"}
+- Future Vision: ${project.futureVision || "N/A"}
 - GitHub: ${project.repoLink ? "Yes" : "No"}
-- Demo: ${project.technicalDemoLink ? "Yes" : "No"}
-- Video: ${project.presentationLink ? "Yes" : "No"}
+- Live App: ${project.liveAppLink ? "Yes" : "No"}
+- Demo/Video: ${project.presentationLink ? "Yes" : "No"}
+- Solana Integration: ${project.solanaIntegration || "N/A"}
 
 Evaluate on:
-1. **Innovation** (1-10): Is the idea interesting? Does it solve a problem?
-2. **Effort** (1-10): Can you tell the team worked hard on this?
-3. **Potential** (1-10): If finished, would this be useful?
-4. **Fit** (1-10): Does it align with AI agents + Solana?
+1. **Innovation** (1-10): Is the idea interesting? Does it solve a real problem?
+2. **Effort** (1-10): Can you tell the team worked hard? Is the technical approach solid?
+3. **Potential** (1-10): If finished, would this be useful? Is the business case viable?
+4. **Fit** (1-10): Does it align with AI agents + Solana? Is Solana integration meaningful?
 
 SCORING GUIDELINES (be generous for hackathon context):
 - 8-10: Excellent hackathon project, clear effort, good idea
