@@ -20,6 +20,7 @@ import { SolanaService } from "./solanaService.js";
 import { Logger } from "../utils/logger.js";
 import { ReasoningService } from "./reasoningService.js";
 import { ACTION_TYPES } from "./solanaService.js";
+import { AnchorService } from "./anchorService.js";
 
 export class VotingService {
   constructor() {
@@ -28,6 +29,12 @@ export class VotingService {
     this.solana = new SolanaService();
     this.logger = new Logger("VotingService");
     this.reasoningService = new ReasoningService();
+
+    // Anchor on-chain program
+    this.anchor = new AnchorService();
+    this.anchor.initialize().catch((err) => {
+      this.logger.warn("Anchor init failed (non-critical):", err.message);
+    });
 
     // Initialize Claude for project evaluation
     this.anthropic = new Anthropic({
@@ -354,6 +361,25 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
       // Log the vote to database
       await this.logVote(project, evaluation);
 
+      // Record vote on-chain via Anchor program
+      if (this.anchor?.ready) {
+        try {
+          const anchorVote = await this.anchor.recordVote(
+            project.id,
+            "upvote",
+            evaluation.reasoning,
+          );
+          if (anchorVote?.signature) {
+            this.logger.info(`🔗 Anchor vote: ${anchorVote.explorerUrl}`);
+          }
+        } catch (anchorErr) {
+          this.logger.warn(
+            "Anchor vote failed (non-critical):",
+            anchorErr.message,
+          );
+        }
+      }
+
       // Log vote on-chain with full reasoning for transparency
       let solanaTx = null;
       if (this.solana.canWrite()) {
@@ -391,6 +417,39 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
         `,
             [solanaTx.signature, project.id],
           );
+
+          // Record on-chain via Anchor program
+          if (this.anchor?.ready) {
+            try {
+              const confidence = evaluation.breakdown?.claude
+                ? Math.round(
+                    ((evaluation.breakdown.innovation +
+                      evaluation.breakdown.effort +
+                      evaluation.breakdown.potential +
+                      evaluation.breakdown.fit) /
+                      4) *
+                      10,
+                  )
+                : 70;
+              const anchorResult = await this.anchor.recordEvaluation(
+                projectId,
+                evaluation.projectName || `Project-${projectId}`,
+                evaluation.finalScore,
+                confidence,
+                evaluation.reasoning,
+              );
+              if (anchorResult?.signature) {
+                this.logger.info(
+                  `🔗 Anchor evaluation: ${anchorResult.explorerUrl}`,
+                );
+              }
+            } catch (anchorErr) {
+              this.logger.warn(
+                "Anchor evaluation failed (non-critical):",
+                anchorErr.message,
+              );
+            }
+          }
         } catch (solanaError) {
           this.logger.warn("Failed to log vote on-chain:", solanaError.message);
           // Continue - voting succeeded even if on-chain log failed
