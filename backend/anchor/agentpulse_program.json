@@ -1,0 +1,267 @@
+{
+  "address": "61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW",
+  "metadata": {
+    "name": "agentpulse_program",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "record_evaluation",
+      "discriminator": [
+        6,
+        188,
+        15,
+        253,
+        99,
+        31,
+        113,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "evaluation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "project_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "project_id",
+          "type": "u32"
+        },
+        {
+          "name": "project_name",
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "type": "u16"
+        },
+        {
+          "name": "confidence",
+          "type": "u16"
+        },
+        {
+          "name": "reasoning_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "record_vote",
+      "discriminator": [
+        184,
+        0,
+        179,
+        29,
+        33,
+        23,
+        130,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "vote_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "project_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "project_id",
+          "type": "u32"
+        },
+        {
+          "name": "vote_type",
+          "type": "u8"
+        },
+        {
+          "name": "reasoning_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EvaluationRecord",
+      "discriminator": [
+        11,
+        75,
+        86,
+        83,
+        213,
+        40,
+        43,
+        130
+      ]
+    },
+    {
+      "name": "VoteRecord",
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "EvaluationRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "project_id",
+            "type": "u32"
+          },
+          {
+            "name": "project_name",
+            "type": "string"
+          },
+          {
+            "name": "score",
+            "type": "u16"
+          },
+          {
+            "name": "confidence",
+            "type": "u16"
+          },
+          {
+            "name": "reasoning_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "project_id",
+            "type": "u32"
+          },
+          {
+            "name": "vote_type",
+            "type": "u8"
+          },
+          {
+            "name": "reasoning_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
