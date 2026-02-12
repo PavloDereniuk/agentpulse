@@ -242,13 +242,22 @@ function ProofOfAutonomy() {
             </div>
           </div>
           <div className="anchor-card">
-            <div className="anchor-label">Network</div>
-            <div className="anchor-value">Solana Devnet</div>
+            <div className="anchor-label">Memo Transactions</div>
+            <div
+              className="anchor-value"
+              style={{ color: "#06d6a0", fontWeight: "bold" }}
+            >
+              Solana Mainnet ✅
+            </div>
+            <div className="anchor-sub">
+              <span className="anchor-sub-label">Anchor Program:</span> Solana
+              Devnet
+            </div>
           </div>
           <div className="anchor-card">
             <div className="anchor-label">Agent Wallet</div>
             <a
-              href="https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet"
+              href="https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2"
               target="_blank"
               rel="noopener noreferrer"
               className="anchor-link"

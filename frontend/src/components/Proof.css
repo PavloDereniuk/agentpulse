@@ -219,6 +219,23 @@
   padding: 12px 16px;
 }
 
+.anchor-sub {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.anchor-sub-label {
+  color: #888;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 .anchor-label {
   font-size: 0.75rem;
   color: #888;
