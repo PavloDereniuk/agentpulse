@@ -118,6 +118,51 @@ app.get("/api/stats", (req, res) => {
 });
 
 // ============================================
+// ANCHOR PROGRAM ENDPOINTS
+// ============================================
+app.get("/api/anchor/stats", async (req, res) => {
+  try {
+    const { AnchorService } = await import("./services/anchorService.js");
+    const anchor = new AnchorService();
+    await anchor.initialize();
+
+    const stats = {
+      programId: "61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW",
+      network: "devnet",
+      explorerUrl:
+        "https://explorer.solana.com/address/61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW?cluster=devnet",
+      wallet: "5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2",
+      instructions: ["record_evaluation", "record_vote"],
+      pdaSeeds: {
+        evaluation: '[b"eval", authority, project_id]',
+        vote: '[b"vote", authority, project_id]',
+      },
+      dataStructure: {
+        evaluation:
+          "authority, project_id, project_name, score, confidence, reasoning_hash, timestamp",
+        vote: "authority, project_id, vote_type, reasoning_hash, timestamp",
+      },
+      ready: anchor.ready,
+    };
+
+    res.json({ success: true, anchor: stats });
+  } catch (error) {
+    res.json({
+      success: true,
+      anchor: {
+        programId: "61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW",
+        network: "devnet",
+        explorerUrl:
+          "https://explorer.solana.com/address/61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW?cluster=devnet",
+        wallet: "5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2",
+        ready: false,
+        error: error.message,
+      },
+    });
+  }
+});
+
+// ============================================
 // SOLANA ENDPOINTS
 // ============================================
 

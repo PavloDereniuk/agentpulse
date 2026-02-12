@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import "./Proof.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://agentpulse-production-8e01.up.railway.app";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://agentpulse-production-8e01.up.railway.app";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -62,54 +64,74 @@ function ProofOfAutonomy() {
    */
   const extractSummary = (proof) => {
     if (!proof.reasoning) return "Decision made";
-    
-    const lines = proof.reasoning.split("\n").filter(l => l.trim());
-    
+
+    const lines = proof.reasoning.split("\n").filter((l) => l.trim());
+
     // For votes - find project name or score
     if (proof.type === "VOTE_CAST") {
-      const projectLine = lines.find(l => /project|name:/i.test(l) && !l.includes('==='));
-      const scoreLine = lines.find(l => /final\s*score|total.*score/i.test(l));
+      const projectLine = lines.find(
+        (l) => /project|name:/i.test(l) && !l.includes("==="),
+      );
+      const scoreLine = lines.find((l) =>
+        /final\s*score|total.*score/i.test(l),
+      );
       if (projectLine) {
-        const name = projectLine.replace(/.*(?:Name|Project):\s*"?/i, '').replace(/".*/, '').replace(/\*+/g, '').trim();
-        const score = scoreLine?.match(/[\d.]+(?:\/10)?/)?.[0] || '';
+        const name = projectLine
+          .replace(/.*(?:Name|Project):\s*"?/i, "")
+          .replace(/".*/, "")
+          .replace(/\*+/g, "")
+          .trim();
+        const score = scoreLine?.match(/[\d.]+(?:\/10)?/)?.[0] || "";
         if (name && name.length > 2 && name.length < 100) {
-          return `Evaluated "${name}"${score ? ` - Score: ${score}` : ''}`;
+          return `Evaluated "${name}"${score ? ` - Score: ${score}` : ""}`;
         }
       }
     }
-    
+
     // For comments - find author and topic
     if (proof.type === "COMMENT_RESPONSE") {
-      const authorLine = lines.find(l => /author:|comment.*by/i.test(l));
-      const topicLine = lines.find(l => /topic:|post.*title/i.test(l));
-      const strategyLine = lines.find(l => /strategy:|approach:/i.test(l));
-      
-      const author = authorLine?.replace(/.*(?:author|by):\s*/i, '').trim();
-      const topic = topicLine?.replace(/.*(?:topic|title):\s*"?/i, '').replace(/".*/, '').trim();
-      
-      if (author && topic && topic !== 'General discussion') {
+      const authorLine = lines.find((l) => /author:|comment.*by/i.test(l));
+      const topicLine = lines.find((l) => /topic:|post.*title/i.test(l));
+      const strategyLine = lines.find((l) => /strategy:|approach:/i.test(l));
+
+      const author = authorLine?.replace(/.*(?:author|by):\s*/i, "").trim();
+      const topic = topicLine
+        ?.replace(/.*(?:topic|title):\s*"?/i, "")
+        .replace(/".*/, "")
+        .trim();
+
+      if (author && topic && topic !== "General discussion") {
         return `Responded to ${author} in "${topic}"`;
       } else if (author) {
         return `Responded to comment by ${author}`;
       } else if (strategyLine) {
-        const strategy = strategyLine.replace(/.*(?:strategy|approach):\s*/i, '').trim();
-        if (strategy.length > 5) return `Response strategy: ${strategy.slice(0, 100)}`;
+        const strategy = strategyLine
+          .replace(/.*(?:strategy|approach):\s*/i, "")
+          .trim();
+        if (strategy.length > 5)
+          return `Response strategy: ${strategy.slice(0, 100)}`;
       }
-      
+
       // Fallback - find rationale or decision line
-      const rationale = lines.find(l => 
-        /rationale:|decision:|because|should respond/i.test(l) && l.length > 20
+      const rationale = lines.find(
+        (l) =>
+          /rationale:|decision:|because|should respond/i.test(l) &&
+          l.length > 20,
       );
-      if (rationale) return rationale.replace(/.*(?:rationale|decision):\s*/i, '').slice(0, 140);
+      if (rationale)
+        return rationale
+          .replace(/.*(?:rationale|decision):\s*/i, "")
+          .slice(0, 140);
     }
 
     // Default - first meaningful line (skip headers with ===)
-    const meaningful = lines.find(l => 
-      !l.includes('===') && 
-      !l.match(/^-+$/) && 
-      l.length > 15 &&
-      !l.startsWith('COMMENT') &&
-      !l.startsWith('VOTE')
+    const meaningful = lines.find(
+      (l) =>
+        !l.includes("===") &&
+        !l.match(/^-+$/) &&
+        l.length > 15 &&
+        !l.startsWith("COMMENT") &&
+        !l.startsWith("VOTE"),
     );
     return meaningful?.slice(0, 140) || "Autonomous decision made";
   };
@@ -126,19 +148,28 @@ function ProofOfAutonomy() {
   const hasMore = proofs.length > visibleCount;
 
   // Calculate extra stats from visible proofs
-  const avgReasoningLen = proofs.length > 0
-    ? Math.round(proofs.reduce((sum, p) => sum + (p.reasoning?.length || 0), 0) / proofs.length)
-    : 0;
-  const highConfPct = proofs.length > 0
-    ? Math.round((proofs.filter(p => p.confidence > 0.8).length / proofs.length) * 100)
-    : 0;
+  const avgReasoningLen =
+    proofs.length > 0
+      ? Math.round(
+          proofs.reduce((sum, p) => sum + (p.reasoning?.length || 0), 0) /
+            proofs.length,
+        )
+      : 0;
+  const highConfPct =
+    proofs.length > 0
+      ? Math.round(
+          (proofs.filter((p) => p.confidence > 0.8).length / proofs.length) *
+            100,
+        )
+      : 0;
 
   return (
     <div className="proof-container">
       <div className="proof-header">
         <h1>{"\u{1F510}"} Proof of Autonomy</h1>
         <p className="subtitle">
-          Every decision includes detailed reasoning — verifiable and transparent
+          Every decision includes detailed reasoning — verifiable and
+          transparent
         </p>
       </div>
 
@@ -172,6 +203,62 @@ function ProofOfAutonomy() {
         </div>
       )}
 
+      {/* Anchor Program On-Chain */}
+      <div className="anchor-section">
+        <h2>⚓ Custom Anchor Program</h2>
+        <p className="anchor-subtitle">
+          Structured evaluation data stored in Solana PDA accounts
+        </p>
+        <div className="anchor-grid">
+          <div className="anchor-card">
+            <div className="anchor-label">Program ID</div>
+            <a
+              href="https://explorer.solana.com/address/61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW?cluster=devnet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="anchor-link"
+            >
+              61YS7i32...8hRp8GW
+            </a>
+          </div>
+          <div className="anchor-card">
+            <div className="anchor-label">Instructions</div>
+            <div className="anchor-value">
+              <code>record_evaluation</code>
+              <code>record_vote</code>
+            </div>
+          </div>
+          <div className="anchor-card">
+            <div className="anchor-label">PDA Seeds</div>
+            <div className="anchor-value">
+              <code>[eval, authority, project_id]</code>
+              <code>[vote, authority, project_id]</code>
+            </div>
+          </div>
+          <div className="anchor-card">
+            <div className="anchor-label">On-Chain Data</div>
+            <div className="anchor-value">
+              <span>score · confidence · reasoning_hash · timestamp</span>
+            </div>
+          </div>
+          <div className="anchor-card">
+            <div className="anchor-label">Network</div>
+            <div className="anchor-value">Solana Devnet</div>
+          </div>
+          <div className="anchor-card">
+            <div className="anchor-label">Agent Wallet</div>
+            <a
+              href="https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="anchor-link"
+            >
+              5EAgc3En...g1o2
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       {stats && (
         <div className="proof-filters">
@@ -202,15 +289,15 @@ function ProofOfAutonomy() {
             {visibleProofs.map((proof) => (
               <div key={proof.hash} className="proof-card">
                 <div className="proof-header-row">
-                  <div className="proof-type">{formatActionType(proof.type)}</div>
+                  <div className="proof-type">
+                    {formatActionType(proof.type)}
+                  </div>
                   <div className="proof-time">
                     {new Date(proof.timestamp).toLocaleString()}
                   </div>
                 </div>
 
-                <div className="proof-summary">
-                  {extractSummary(proof)}
-                </div>
+                <div className="proof-summary">{extractSummary(proof)}</div>
 
                 {proof.confidence !== null && (
                   <div className="confidence-meter">
@@ -241,8 +328,10 @@ function ProofOfAutonomy() {
                       className="reasoning-toggle"
                       onClick={() => toggleReasoning(proof.hash)}
                     >
-                      {expandedProof === proof.hash ? "\u25BC Hide" : "\u25B6 Show"} Full
-                      Reasoning
+                      {expandedProof === proof.hash
+                        ? "\u25BC Hide"
+                        : "\u25B6 Show"}{" "}
+                      Full Reasoning
                     </button>
 
                     {expandedProof === proof.hash && (
@@ -292,12 +381,15 @@ function ProofOfAutonomy() {
             {proofs.length > ITEMS_PER_PAGE && (
               <div className="proof-pagination">
                 <span className="proof-showing">
-                  Showing {Math.min(visibleCount, proofs.length)} of {proofs.length}
+                  Showing {Math.min(visibleCount, proofs.length)} of{" "}
+                  {proofs.length}
                 </span>
                 {hasMore ? (
                   <button
                     className="proof-show-more"
-                    onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                    onClick={() =>
+                      setVisibleCount((prev) => prev + ITEMS_PER_PAGE)
+                    }
                   >
                     Show more
                   </button>
