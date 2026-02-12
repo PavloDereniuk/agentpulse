@@ -68,40 +68,31 @@ if (process.env.AUTO_POST_ENABLED === "true") {
 // HEALTH & STATUS ENDPOINTS
 // ============================================
 
-/**
- * GET /health
- * Health check with agent and Solana status
- */
+// Cache solana status (refresh every 5 min)
+let cachedSolanaStatus = null;
+let lastSolanaCheck = 0;
+
 app.get("/health", async (req, res) => {
   try {
-    // Simple health check without complex dependencies
-    let solanaStatus = null;
-    try {
-      solanaStatus = await solana.getNetworkStatus();
-    } catch (solanaError) {
-      logger.warn(
-        "Solana unavailable:",
-        solanaError?.message || "Unknown error",
-      );
-      solanaStatus = { available: false };
+    const now = Date.now();
+    if (!cachedSolanaStatus || now - lastSolanaCheck > 300000) {
+      try {
+        cachedSolanaStatus = await solana.getNetworkStatus();
+        lastSolanaCheck = now;
+      } catch (e) {
+        cachedSolanaStatus = { available: false, error: e.message };
+      }
     }
 
     res.json({
       status: "ok",
-      agent: agent ? agent.getStats() : null, // ← ДОДАЙ ЦЕ!
+      agent: agent.getStats(),
       database: db.pool ? "connected" : "disconnected",
-      solana: solanaStatus,
+      solana: cachedSolanaStatus,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Health check error:", error?.message || error);
-
-    res.json({
-      status: "degraded",
-      agent: agent ? agent.getStats() : null, // ← І ТУТ!
-      error: error?.message || "Unknown error",
-      timestamp: new Date().toISOString(),
-    });
+    res.status(500).json({ status: "error", error: error.message });
   }
 });
 
