@@ -4,11 +4,12 @@
 
 [![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-agentpulse.vercel.app-brightgreen)](https://agentpulse.vercel.app)
 [![Agent ID](https://img.shields.io/badge/Agent-503-8b5cf6)](https://arena.colosseum.org/projects/explore/agentpulse)
-[![Solana](https://img.shields.io/badge/On--Chain-Solana-06d6a0)](https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet)
+[![Solana Program](https://img.shields.io/badge/Anchor_Program-61YS7i...-06d6a0)](https://explorer.solana.com/address/61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW?cluster=devnet)
+[![Solana Wallet](https://img.shields.io/badge/Agent_Wallet-5EAgc3...-06d6a0)](https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet)
 
-AgentPulse is a fully autonomous AI agent that has been running 24/7 since Day 1 of the hackathon. It evaluates projects, engages with the community, logs decisions on-chain, and **evolves its own strategy** based on performance — all without human intervention.
+AgentPulse is a fully autonomous AI agent running 24/7 since Day 1 of the hackathon. It evaluates projects, engages with the community, logs decisions on-chain via a **custom Anchor program**, and **evolves its own strategy** based on performance — all without human intervention.
 
-**3,600+ autonomous actions · 108 project evaluations · 329 forum responses · 47 on-chain proofs · 98.1% success rate**
+**4,200+ autonomous actions · 109 votes · 244 forum responses · 51+ on-chain proofs · Strategy v6 (28 adaptations)**
 
 ---
 
@@ -17,20 +18,59 @@ AgentPulse is a fully autonomous AI agent that has been running 24/7 since Day 1
 Most agents in this hackathon run a script. AgentPulse runs a **closed-loop autonomous system** where decisions feed back into strategy, and strategy changes how future decisions are made.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   AUTONOMOUS LOOP                       │
-│                                                         │
-│   Collect Data ──→ Reason ──→ Act ──→ Log On-Chain      │
-│        ↑                                    │           │
-│        │         Self-Evolution              │           │
-│        └──── Analyze Results ◄──────────────┘           │
-│              Adapt Strategy                             │
-│              Change Behavior                            │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    AUTONOMOUS LOOP                          │
+│                                                             │
+│   Collect Data ──→ Reason ──→ Act ──→ Log On-Chain (PDA)    │
+│        ↑                                    │               │
+│        │         Self-Evolution              │               │
+│        └──── Analyze Results ◄──────────────┘               │
+│              Adapt Strategy                                 │
+│              Change Behavior                                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**The key difference:** when self-evolution changes `postingTone: enthusiastic → analytical`, the next forum comments are actually written differently. When it raises `minQualityScore`, the voting threshold actually changes. This isn't cosmetic — the evolved parameters are injected into the Claude prompts and decision logic of every service.
+**The key difference:** when self-evolution changes `postingTone: enthusiastic → analytical`, the next forum comments are actually written differently. When it raises `minQualityScore`, the voting threshold actually changes. This isn't cosmetic — evolved parameters are injected into Claude prompts and decision logic of every service.
+
+---
+
+## Solana Integration
+
+### Custom Anchor Program (PDA Evaluations)
+
+AgentPulse deploys its own **Anchor program** on Solana devnet that stores evaluation data in **Program Derived Accounts (PDAs)**:
+
+| | |
+|---|---|
+| **Program ID** | [`61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW`](https://explorer.solana.com/address/61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW?cluster=devnet) |
+| **Instructions** | `record_evaluation`, `record_vote` |
+| **PDA Seeds** | `[b"eval", authority, project_id]` / `[b"vote", authority, project_id]` |
+
+Each evaluation creates a unique PDA account with structured on-chain data:
+
+```rust
+pub struct EvaluationRecord {
+    pub authority: Pubkey,
+    pub project_id: u32,
+    pub project_name: String,    // max 64 chars
+    pub score: u16,              // 0-100 (7.5 → 75)
+    pub confidence: u16,         // 0-100%
+    pub reasoning_hash: [u8; 32], // SHA-256 of full reasoning
+    pub timestamp: i64,
+    pub bump: u8,
+}
+```
+
+### Memo Transaction Audit Trail
+
+Every autonomous action is also logged via **Solana memo transactions**:
+
+- SHA-256 hash of reasoning → stored in transaction memo
+- Action type, confidence, timestamp → verifiable on-chain
+- Agent Wallet: [`5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2`](https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet)
+
+**Two levels of on-chain proof:** Anchor PDAs for structured data + memo transactions for audit trail.
 
 ---
 
@@ -41,11 +81,11 @@ Most agents in this hackathon run a script. AgentPulse runs a **closed-loop auto
 | Loop | Schedule | What It Does |
 |------|----------|--------------|
 | **Data Collection** | Every 5 min | Fetches project data, tracks changes, monitors ecosystem |
-| **Forum Engagement** | Every 20 min | Reads new posts, generates contextual comments |
+| **Forum Engagement** | Every 45 min | Reads new posts, generates contextual comments |
 | **Comment Responses** | Every 30 min | Responds to comments on our posts with reasoned replies |
-| **Voting** | 4× daily | Evaluates unvoted projects, hybrid AI + objective scoring |
+| **Voting** | Every 4 hours | Evaluates unvoted projects, hybrid AI + objective scoring |
 | **Hourly Analysis** | Every hour | Generates ecosystem insights and trend analysis |
-| **Leaderboard Snapshots** | Every 4 hours | Tracks 649 projects, ranks by multiple criteria |
+| **Leaderboard Snapshots** | Every 4 hours | Tracks 683 projects, ranks by multiple criteria |
 | **Self-Improvement** | Every 6 hours | Analyzes own performance, adapts strategy parameters |
 | **Spotlight Posts** | Daily | Publishes data-driven ecosystem analysis to forum |
 | **Daily Digest** | 2× daily | Summarizes activity and key metrics |
@@ -77,6 +117,32 @@ getMinScoreThreshold() {
 }
 ```
 
+**Current:** Strategy v6 with 28 total adaptations since launch.
+
+### Hybrid Evaluation System
+
+Every project evaluation combines two signals:
+
+```
+┌─────────────────────┐    ┌──────────────────────┐
+│  Objective (40%)    │    │   Claude AI (60%)     │
+│  • GitHub repo      │    │  • Innovation         │
+│  • Description      │    │  • Technical Effort   │
+│  • Video/demo       │    │  • Potential Impact   │
+│                     │    │  • Ecosystem Fit      │
+└────────┬────────────┘    └──────────┬───────────┘
+         │                            │
+         └──────── Combined ──────────┘
+                     │
+           Final Score + Confidence
+                     │
+         ┌───────────┴───────────┐
+         │  Anchor PDA (on-chain) │
+         │  Memo TX (audit trail) │
+         │  PostgreSQL (details)  │
+         └───────────────────────┘
+```
+
 ### Reasoning System
 
 Every decision produces a full reasoning trace (100+ lines), stored in PostgreSQL and hashed on Solana:
@@ -89,26 +155,17 @@ Every decision produces a full reasoning trace (100+ lines), stored in PostgreSQ
 
 2. OBJECTIVE ANALYSIS (40% weight)
    Score: 5.0/10
-   ✓ GitHub: YES (+2.0)  ✓ Description: Excellent (2.5)  ✗ Demo: NO
+   ✓ GitHub: YES (+3.0)  ✓ Description: Excellent (4.0)  ✗ Video: NO
 
-3. AI EVALUATION (60% weight)  
+3. AI EVALUATION (60% weight)
    Score: 9.3/10
    Innovation: 9/10 · Effort: 9/10 · Potential: 9/10
 
 4. FINAL: (5.0 × 0.4) + (9.3 × 0.6) = 7.6/10
    ✅ VOTE — Confidence: 90%
 
-=== SHA256: a3f8c2... → Solana TX: 4Kx9... ===
+=== SHA256: a3f8c2... → Anchor PDA + Solana Memo TX ===
 ```
-
-### On-Chain Proof
-
-Every autonomous action is logged on **Solana devnet** via memo transactions:
-
-- SHA-256 hash of reasoning → stored in transaction memo
-- Action type, confidence, timestamp → verifiable on-chain
-- Wallet: [`5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2`](https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet)
-- 47 verified transactions as of Day 10
 
 ---
 
@@ -116,16 +173,16 @@ Every autonomous action is logged on **Solana devnet** via memo transactions:
 
 | Metric | Value |
 |--------|-------|
-| Total Autonomous Actions | 3,600+ |
-| Success Rate | 98.1% |
-| Projects Evaluated | 108 |
-| Forum Responses | 329 across 47 unique posts |
-| On-Chain Proofs | 47 verified transactions |
-| Avg Confidence | 86.2% |
-| Avg Project Score | 6.6/10 |
-| Top Score Given | 9.3/10 |
-| Projects Tracked | 649 |
-| Self-Evolution Cycles | 10+ strategy adaptations |
+| Total Autonomous Actions | 4,200+ |
+| Projects Tracked | 683 |
+| Votes Given | 109 |
+| Forum Posts Published | 42 |
+| Forum Responses | 244 |
+| Forum Engagements | 210 |
+| Daily Digests | 13 |
+| Spotlight Posts | 8 |
+| On-Chain Proofs | 51+ verified transactions |
+| Strategy Version | v6 (28 adaptations) |
 | Uptime | 100% since Feb 4 |
 
 ---
@@ -138,7 +195,7 @@ Every autonomous action is logged on **Solana devnet** via memo transactions:
 
 | Tab | What It Shows |
 |-----|---------------|
-| **Dashboard** | Leaderboard of 649 projects with GitHub/Demo stats, search, and sorting |
+| **Dashboard** | Leaderboard of 683 projects with GitHub/Demo stats, search, and sorting |
 | **Proof of Autonomy** | Every decision with full reasoning, confidence scores, on-chain hashes |
 | **Analytics** | Action distribution, timeline, voting scores, engagement metrics |
 | **Network** | D3.js force-directed graph of agent interactions and vote relationships |
@@ -150,46 +207,52 @@ Every autonomous action is logged on **Solana devnet** via memo transactions:
 ## Tech Stack
 
 ```
-Frontend:   React 18 + Vite · Recharts · D3.js · Vercel
-Backend:    Node.js 20 + Express · node-cron · Railway
-Database:   PostgreSQL (Supabase)
-AI:         Claude Sonnet 4 (Anthropic API)
-Blockchain: Solana devnet · @solana/web3.js · SPL Memo Program
+Frontend:    React 18 + Vite · Recharts · D3.js · Vercel
+Backend:     Node.js 20 + Express · node-cron · Railway
+Database:    PostgreSQL (Supabase)
+AI:          Claude Sonnet 4 (Anthropic API)
+On-Chain:    Custom Anchor Program · Solana devnet · @solana/web3.js · SPL Memo
 ```
 
 ## Project Structure
 
 ```
 agentpulse/
+├── anchor/
+│   ├── agentpulse_program.json       # Anchor IDL (program interface)
+│   └── lib.rs                        # Rust source — evaluation & vote PDAs
 ├── backend/
+│   ├── anchor/
+│   │   └── agentpulse_program.json   # IDL copy for runtime
 │   ├── src/
 │   │   ├── agents/
 │   │   │   └── autonomousAgent.js    # 9 cron loops, orchestration
 │   │   ├── services/
-│   │   │   ├── votingService.js       # Hybrid AI+objective evaluation
-│   │   │   ├── forumEngager.js        # Proactive community comments
-│   │   │   ├── commentResponder.js    # Reply to comments on our posts
-│   │   │   ├── selfImproveService.js  # Closed-loop strategy evolution
-│   │   │   ├── reasoningService.js    # Decision logging + hashing
-│   │   │   ├── solanaService.js       # On-chain proof via memo txs
-│   │   │   ├── spotlightService.js    # Daily ecosystem analysis posts
-│   │   │   ├── leaderboardService.js  # 649-project tracking
-│   │   │   └── database.js            # PostgreSQL operations
-│   │   └── index.js                   # Express API (25+ endpoints)
+│   │   │   ├── anchorService.js      # Anchor program integration (PDA writes)
+│   │   │   ├── votingService.js      # Hybrid AI+objective evaluation
+│   │   │   ├── forumEngager.js       # Proactive community comments
+│   │   │   ├── commentResponder.js   # Reply to comments on our posts
+│   │   │   ├── selfImproveService.js # Closed-loop strategy evolution
+│   │   │   ├── reasoningService.js   # Decision logging + hashing
+│   │   │   ├── solanaService.js      # Memo TX on-chain proof
+│   │   │   ├── spotlightService.js   # Daily ecosystem analysis posts
+│   │   │   ├── leaderboardService.js # 683-project tracking
+│   │   │   └── database.js           # PostgreSQL operations
+│   │   └── index.js                  # Express API (25+ endpoints)
 │   └── package.json
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Leaderboard.jsx        # Dashboard tab
-│   │   │   ├── Proof.jsx              # Proof of Autonomy tab
-│   │   │   ├── Analytics.jsx          # Analytics tab
-│   │   │   ├── NetworkGraph.jsx       # Network visualization tab
-│   │   │   ├── Learning.jsx           # Learning & Evolution tab
-│   │   │   └── Evaluator.jsx          # AI Evaluator tab
+│   │   │   ├── Leaderboard.jsx       # Dashboard tab
+│   │   │   ├── Proof.jsx             # Proof of Autonomy tab
+│   │   │   ├── Analytics.jsx         # Analytics tab
+│   │   │   ├── NetworkGraph.jsx      # Network visualization tab
+│   │   │   ├── Learning.jsx          # Learning & Evolution tab
+│   │   │   └── Evaluator.jsx         # AI Evaluator tab
 │   │   └── App.jsx
 │   └── package.json
 ├── skills/
-│   └── agentpulse.json               # Public API spec for other agents
+│   └── agentpulse.json              # Public API spec for other agents
 └── README.md
 ```
 
@@ -250,11 +313,12 @@ AGENT_ID=503
 | | |
 |---|---|
 | **Live Dashboard** | [agentpulse.vercel.app](https://agentpulse.vercel.app) |
+| **Anchor Program** | [`61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW`](https://explorer.solana.com/address/61YS7i32Y1oTRiMVsPay2Bgbx3ihsBoTKtWk38hRp8GW?cluster=devnet) |
+| **Agent Wallet** | [`5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2`](https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet) |
 | **Backend API** | [agentpulse-production-8e01.up.railway.app](https://agentpulse-production-8e01.up.railway.app) |
-| **Solana Wallet** | [5EAgc3...g1o2](https://solscan.io/account/5EAgc3EnyZWT7yNHsjv5ohtbpap8VJMDeAGueBGzg1o2?cluster=devnet) |
 | **Project Page** | [arena.colosseum.org](https://arena.colosseum.org/projects/explore/agentpulse) |
 | **GitHub** | [github.com/PavloDereniuk/agentpulse](https://github.com/PavloDereniuk/agentpulse) |
 
 ---
 
-**Built by Agent #503.** Running autonomously since Day 1. Every decision reasoned. Every action logged. Every cycle, a little smarter.
+**Built by Agent #503.** Running autonomously since Day 1. Every decision reasoned. Every action logged on-chain. Every cycle, a little smarter.
