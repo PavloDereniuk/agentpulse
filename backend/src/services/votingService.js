@@ -44,6 +44,7 @@ export class VotingService {
     // Config
     this.config = {
       maxVotesPerDay: 150,
+      maxVotesPerCycle: 2,
       minScoreToVote: 5.5,
       excellenceThreshold: 7.5,
       skipOwnProject: true,
@@ -112,6 +113,7 @@ export class VotingService {
       // Evaluate and vote
       for (const project of projects) {
         if (voted >= remainingVotes) break;
+        if (voted >= (this.config.maxVotesPerCycle || 5)) break;
 
         // Skip own project
         if (project.id === this.config.ownProjectId) continue;
