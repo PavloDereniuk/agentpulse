@@ -1639,87 +1639,59 @@ app.post("/api/evaluate/live", async (req, res) => {
     // Calculate objective score
     let objectiveScore = 0;
 
-    // GitHub check (+2 points) - search across all possible field names
+    // GitHub check (+1.5 points)
     const githubLink = project.repoLink || project.repo_link || project.github || project.githubUrl || project.github_url || project.githubLink || project.github_link || project.data?.repoLink || project.data?.github || '';
     if (githubLink && githubLink.trim()) {
-      objectiveScore += 2;
+      objectiveScore += 1.5;
     }
 
-    // Demo check - SKIPPED (Colosseum list API does not expose demo links)
-    const demoLink = '';
-
-    // Description quality (0-2.5 points)
+    // Description quality (0-1.5 points)
     const descLength = (project.description || "").length;
     if (descLength > 500) {
-      objectiveScore += 2.5;
-    } else if (descLength > 200) {
       objectiveScore += 1.5;
+    } else if (descLength > 200) {
+      objectiveScore += 1.0;
     } else if (descLength > 50) {
       objectiveScore += 0.5;
     }
 
-    // Video check (+2.5 points) - search across all possible field names
-    const videoLink = project.presentationLink || project.presentation_link || project.video || project.videoUrl || project.video_url || project.data?.presentationLink || project.data?.video || '';
-    if (videoLink && videoLink.trim()) {
-      objectiveScore += 2.5;
+    // Problem & Audience (+1.5 points)
+    const hasProblem = project.problemStatement && project.problemStatement.length > 30;
+    const hasAudience = project.targetAudience && project.targetAudience.length > 20;
+    if (hasProblem) objectiveScore += 0.75;
+    if (hasAudience) objectiveScore += 0.75;
+
+    // Technical Approach / Solution (+1.5 points)
+    const hasTechnical = project.technicalApproach && project.technicalApproach.length > 50;
+    if (hasTechnical) objectiveScore += 1.5;
+    else if (project.technicalApproach && project.technicalApproach.length > 20) objectiveScore += 0.75;
+
+    // Business Case (+1 point)
+    const hasBusiness = project.businessModel && project.businessModel.length > 20;
+    const hasCompetitive = project.competitiveLandscape && project.competitiveLandscape.length > 20;
+    const hasFuture = project.futureVision && project.futureVision.length > 20;
+    if (hasBusiness) objectiveScore += 0.4;
+    if (hasCompetitive) objectiveScore += 0.3;
+    if (hasFuture) objectiveScore += 0.3;
+
+    // Live App / Demo (+1.5 points)
+    const demoLink = project.liveAppLink || project.technicalDemoLink || project.presentationLink || '';
+    if (demoLink && demoLink.trim()) {
+      objectiveScore += 1.0;
+      if (demoLink.includes("vercel") || demoLink.includes("netlify") || demoLink.includes("railway") || demoLink.includes(".app")) {
+        objectiveScore += 0.5;
+      }
     }
 
-    logger.info(`📊 ${project.name}: objective=${objectiveScore}/10, calling Claude...`);
+    // Video (+1.5 points)
+    const videoLink = project.presentationLink || project.presentation_link || project.video || project.videoUrl || project.video_url || project.data?.presentationLink || project.data?.video || '';
+    if (videoLink && videoLink.trim()) {
+      objectiveScore += 1.5;
+    }
 
-    // Get AI evaluation using Claude
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    objectiveScore = Math.min(objectiveScore, 10);
 
-    const prompt = `Evaluate this Solana AI Agent Hackathon project on a scale of 0-10:
-
-Project: ${project.name}
-${project.tagline ? `Tagline: ${project.tagline}` : ""}
-Description: ${project.description || "No description"}
-${githubLink ? `GitHub: ${githubLink}` : ""}
-${demoLink ? `Demo: ${demoLink}` : ""}
-
-Rate these aspects (0-10 each):
-1. Innovation - How novel and creative is the concept?
-2. Technical Effort - Implementation quality and complexity
-3. Potential Impact - Value to Solana/AI ecosystem
-4. Ecosystem Fit - Alignment with Solana's strengths
-
-Respond ONLY with JSON (no markdown, no backticks):
-{
-  "innovation": 7,
-  "effort": 8,
-  "potential": 7,
-  "ecosystemFit": 9,
-  "overall": 7.75,
-  "reasoning": "Brief explanation"
-}`;
-
-    let aiEval;
-    try {
-      const aiResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const aiText = aiResponse.content[0].text;
-
-      // Clean and parse JSON
-      const cleanedText = aiText.replace(/```json|```/g, "").trim();
-      aiEval = JSON.parse(cleanedText);
-
-      // Validate required fields
-      if (
-        !aiEval.innovation ||
-        !aiEval.effort ||
-        !aiEval.potential ||
-        !aiEval.ecosystemFit
-      ) {
-        throw new Error("Missing required fields in AI response");
-      }
-
-      logger.info(`🤖 AI score: ${aiEval.overall}/10`);
+    logger.info(`📊 ${project.name}: objective=${objectiveScore.toFixed(1)}/10, calling Claude...`);
     } catch (parseError) {
       logger.error("Failed to parse Claude response:", parseError.message);
       logger.info("Using fallback evaluation based on objective score");
@@ -1738,7 +1710,7 @@ Respond ONLY with JSON (no markdown, no backticks):
 
     // Calculate final score (40% objective + 60% AI)
     // Normalize objective to /10 scale (max raw = 7)
-    const objectiveNormalized = (objectiveScore / 7) * 10;
+     const objectiveNormalized = Math.min(objectiveScore, 10);
     const finalScore = objectiveNormalized * 0.4 + aiEval.overall * 0.6;
     const confidence =
       finalScore >= 8
@@ -1752,7 +1724,7 @@ Respond ONLY with JSON (no markdown, no backticks):
     logger.info(`✅ Final score: ${finalScore.toFixed(1)}/10`);
 
     // Generate detailed reasoning
-    const reasoning = {
+      const reasoning = {
       reasoning: `=== LIVE AI EVALUATION ===
 
 1. PROJECT OVERVIEW
@@ -1761,20 +1733,23 @@ Respond ONLY with JSON (no markdown, no backticks):
    Description: ${descLength} characters
 
 2. OBJECTIVE ANALYSIS (40% weight)
-   Score: ${objectiveNormalized.toFixed(1)}/10 (raw: ${objectiveScore.toFixed(1)}/7)
-   ✓ GitHub Repository: ${githubLink ? "✅ YES (+2.0)" : "❌ NO (0.0)"}
-   ✓ Description Quality: ${descLength > 500 ? "Excellent (2.5)" : descLength > 200 ? "Good (1.5)" : descLength > 50 ? "Basic (0.5)" : "Minimal (0.0)"}
-   ✓ Video Demo: ${videoLink ? "✅ YES (+2.5)" : "❌ NO (0.0)"}
+   Score: ${objectiveNormalized.toFixed(1)}/10
+   ✓ GitHub Repository: ${githubLink ? "✅ YES (+1.5)" : "❌ NO (0.0)"}
+   ✓ Description Quality: ${descLength > 500 ? "Excellent (1.5)" : descLength > 200 ? "Good (1.0)" : descLength > 50 ? "Basic (0.5)" : "Minimal (0.0)"}
+   ✓ Problem & Audience: ${hasProblem ? "✅" : "❌"} Problem (+0.75) | ${hasAudience ? "✅" : "❌"} Audience (+0.75)
+   ✓ Technical Approach: ${hasTechnical ? "✅ YES (+1.5)" : "❌ NO (0.0)"}
+   ✓ Business Case: ${hasBusiness ? "✅" : "❌"} Model | ${hasCompetitive ? "✅" : "❌"} Competitive | ${hasFuture ? "✅" : "❌"} Vision
+   ✓ Live App/Demo: ${demoLink ? "✅ YES" : "❌ NO"}
+   ✓ Video Demo: ${videoLink ? "✅ YES (+1.5)" : "❌ NO (0.0)"}
 
 3. AI EVALUATION BY CLAUDE (60% weight)
    Overall Score: ${aiEval.overall}/10
    Breakdown:
-   • Innovation: ${aiEval.innovation}/10 - ${aiEval.innovation >= 8 ? "Outstanding" : aiEval.innovation >= 7 ? "Excellent" : aiEval.innovation >= 6 ? "Good" : "Average"}
-   • Technical Effort: ${aiEval.effort}/10 - ${aiEval.effort >= 8 ? "Outstanding" : aiEval.effort >= 7 ? "Excellent" : aiEval.effort >= 6 ? "Good" : "Average"}
-   • Potential Impact: ${aiEval.potential}/10 - ${aiEval.potential >= 8 ? "Outstanding" : aiEval.potential >= 7 ? "Excellent" : aiEval.potential >= 6 ? "Good" : "Average"}
-   • Ecosystem Fit: ${aiEval.ecosystemFit}/10 - ${aiEval.ecosystemFit >= 8 ? "Outstanding" : aiEval.ecosystemFit >= 7 ? "Excellent" : aiEval.ecosystemFit >= 6 ? "Good" : "Average"}
-   
-   Claude's Assessment: "${aiEval.reasoning}"
+   • Innovation: ${aiEval.innovation}/10
+   • Technical Effort: ${aiEval.effort}/10
+   • Potential Impact: ${aiEval.potential}/10
+   • Ecosystem Fit: ${aiEval.ecosystemFit}/10
+   ${aiEval.reasoning ? `\n   Analysis: "${aiEval.reasoning}"` : ""}
 
 4. FINAL CALCULATION
    Formula: (Objective × 0.4) + (AI × 0.6)
@@ -1987,22 +1962,36 @@ app.post("/api/agent-insights", async (req, res) => {
     const insightGen = new (
       await import("./services/insightGenerator.js")
     ).InsightGenerator();
-    const prompt = `Analyze this AI agent project from the Colosseum Hackathon:
+     const prompt = `Evaluate this Solana AI Agent Hackathon project on a scale of 0-10:
 
 Project: ${project.name}
+${project.tagline ? `Tagline: ${project.tagline}` : ""}
 Description: ${project.description || "No description"}
-Votes: ${project.voteCount || 0}
-Has Demo: ${project.presentationLink ? "Yes" : "No"}
-Has GitHub: ${project.repoLink ? "Yes" : "No"}
-Focus: ${focusArea}
+${project.problemStatement ? `Problem Statement: ${project.problemStatement}` : ""}
+${project.technicalApproach ? `Technical Approach: ${project.technicalApproach}` : ""}
+${project.targetAudience ? `Target Audience: ${project.targetAudience}` : ""}
+${project.businessModel ? `Business Model: ${project.businessModel}` : ""}
+${project.competitiveLandscape ? `Competitive Landscape: ${project.competitiveLandscape}` : ""}
+${project.futureVision ? `Future Vision: ${project.futureVision}` : ""}
+${project.solanaIntegration ? `Solana Integration: ${project.solanaIntegration}` : ""}
+${githubLink ? `GitHub: ${githubLink}` : ""}
+${demoLink ? `Demo: ${demoLink}` : ""}
 
-Provide a ${focusArea} analysis including:
-1. Quality score (1-10)
-2. Key strengths (3-5 points)
-3. Potential concerns (2-3 points)
-4. Brief overall assessment (2-3 sentences)
+Rate these aspects (0-10 each):
+1. Innovation - How novel and creative is the concept?
+2. Technical Effort - Implementation quality and complexity
+3. Potential Impact - Value to Solana/AI ecosystem
+4. Ecosystem Fit - Alignment with Solana's strengths
 
-Format as JSON: {score, strengths: [], concerns: [], analysis}`;
+Respond ONLY with JSON (no markdown, no backticks):
+{
+  "innovation": 7,
+  "effort": 8,
+  "potential": 7,
+  "ecosystemFit": 9,
+  "overall": 7.75,
+  "reasoning": "Brief explanation"
+}`;
 
     const insight = await insightGen.generateInsight(prompt);
 
