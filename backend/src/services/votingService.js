@@ -583,7 +583,7 @@ Remember: This is a HACKATHON. Reward effort and ideas, not just polish!`;
           evaluation.objectiveScore,
           evaluation.claudeScore,
           evaluation.finalScore,
-          evaluation.finalScore,
+          Math.round(evaluation.finalScore),
           evaluation.reasoning,
           evaluation.shouldVote,
         ],
