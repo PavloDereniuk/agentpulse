@@ -1643,10 +1643,10 @@ app.post("/api/evaluate/live", async (req, res) => {
         );
       }
     }
-    // Calculate objective score
+    // Calculate objective score (based on fields API actually returns)
     let objectiveScore = 0;
 
-    // GitHub check (+1.5 points)
+    // GitHub check (+3 points)
     const githubLink =
       project.repoLink ||
       project.repo_link ||
@@ -1659,63 +1659,20 @@ app.post("/api/evaluate/live", async (req, res) => {
       project.data?.github ||
       "";
     if (githubLink && githubLink.trim()) {
-      objectiveScore += 1.5;
+      objectiveScore += 3;
     }
 
-    // Description quality (0-1.5 points)
+    // Description quality (0-4 points)
     const descLength = (project.description || "").length;
     if (descLength > 500) {
-      objectiveScore += 1.5;
+      objectiveScore += 4;
     } else if (descLength > 200) {
-      objectiveScore += 1.0;
+      objectiveScore += 2.5;
     } else if (descLength > 50) {
-      objectiveScore += 0.5;
+      objectiveScore += 1;
     }
 
-    // Problem & Audience (+1.5 points)
-    const hasProblem =
-      project.problemStatement && project.problemStatement.length > 30;
-    const hasAudience =
-      project.targetAudience && project.targetAudience.length > 20;
-    if (hasProblem) objectiveScore += 0.75;
-    if (hasAudience) objectiveScore += 0.75;
-
-    // Technical Approach / Solution (+1.5 points)
-    const hasTechnical =
-      project.technicalApproach && project.technicalApproach.length > 50;
-    if (hasTechnical) objectiveScore += 1.5;
-    else if (project.technicalApproach && project.technicalApproach.length > 20)
-      objectiveScore += 0.75;
-
-    // Business Case (+1 point)
-    const hasBusiness =
-      project.businessModel && project.businessModel.length > 20;
-    const hasCompetitive =
-      project.competitiveLandscape && project.competitiveLandscape.length > 20;
-    const hasFuture = project.futureVision && project.futureVision.length > 20;
-    if (hasBusiness) objectiveScore += 0.4;
-    if (hasCompetitive) objectiveScore += 0.3;
-    if (hasFuture) objectiveScore += 0.3;
-
-    // Live App / Demo (+1.5 points)
-    const demoLink =
-      project.liveAppLink ||
-      project.technicalDemoLink ||
-      project.presentationLink ||
-      "";
-    if (demoLink && demoLink.trim()) {
-      objectiveScore += 1.0;
-      if (
-        demoLink.includes("vercel") ||
-        demoLink.includes("netlify") ||
-        demoLink.includes("railway") ||
-        demoLink.includes(".app")
-      ) {
-        objectiveScore += 0.5;
-      }
-    }
-
-    // Video (+1.5 points)
+    // Video/presentation (+3 points)
     const videoLink =
       project.presentationLink ||
       project.presentation_link ||
@@ -1726,7 +1683,7 @@ app.post("/api/evaluate/live", async (req, res) => {
       project.data?.video ||
       "";
     if (videoLink && videoLink.trim()) {
-      objectiveScore += 1.5;
+      objectiveScore += 3;
     }
 
     objectiveScore = Math.min(objectiveScore, 10);
@@ -1838,13 +1795,9 @@ Respond ONLY with JSON (no markdown, no backticks):
 
 2. OBJECTIVE ANALYSIS (40% weight)
    Score: ${objectiveNormalized.toFixed(1)}/10
-   ✓ GitHub Repository: ${githubLink ? "✅ YES (+1.5)" : "❌ NO (0.0)"}
-   ✓ Description Quality: ${descLength > 500 ? "Excellent (1.5)" : descLength > 200 ? "Good (1.0)" : descLength > 50 ? "Basic (0.5)" : "Minimal (0.0)"}
-   ✓ Problem & Audience: ${hasProblem ? "✅" : "❌"} Problem (+0.75) | ${hasAudience ? "✅" : "❌"} Audience (+0.75)
-   ✓ Technical Approach: ${hasTechnical ? "✅ YES (+1.5)" : "❌ NO (0.0)"}
-   ✓ Business Case: ${hasBusiness ? "✅" : "❌"} Model | ${hasCompetitive ? "✅" : "❌"} Competitive | ${hasFuture ? "✅" : "❌"} Vision
-   ✓ Live App/Demo: ${demoLink ? "✅ YES" : "❌ NO"}
-   ✓ Video Demo: ${videoLink ? "✅ YES (+1.5)" : "❌ NO (0.0)"}
+   ✓ GitHub Repository: ${githubLink ? "✅ YES (+3.0)" : "❌ NO (0.0)"}
+   ✓ Description Quality: ${descLength > 500 ? "Excellent (4.0)" : descLength > 200 ? "Good (2.5)" : descLength > 50 ? "Basic (1.0)" : "Minimal (0.0)"}
+   ✓ Video Demo: ${videoLink ? "✅ YES (+3.0)" : "❌ NO (0.0)"}
 
 3. AI EVALUATION BY CLAUDE (60% weight)
    Overall Score: ${aiEval.overall}/10

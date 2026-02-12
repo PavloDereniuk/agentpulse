@@ -206,72 +206,26 @@ export class VotingService {
     if (project.name && project.name.length > 3) score += 0.5;
     if (project.tagline && project.tagline.length > 20) score += 0.5;
 
-    // 2. Description quality (1.5 points)
+    // 2. Description quality (3 points)
     if (project.description) {
-      if (project.description.length > 300) score += 1.5;
-      else if (project.description.length > 100) score += 1.0;
-      else if (project.description.length > 30) score += 0.5;
+      if (project.description.length > 300) score += 3;
+      else if (project.description.length > 150) score += 2;
+      else if (project.description.length > 50) score += 1;
     }
 
-    // 3. Problem & Audience (1.5 points)
-    if (project.problemStatement && project.problemStatement.length > 30)
-      score += 0.75;
-    if (project.targetAudience && project.targetAudience.length > 20)
-      score += 0.75;
-
-    // 4. Solution / Technical Approach (1.5 points)
-    if (project.technicalApproach && project.technicalApproach.length > 50)
-      score += 1.5;
-    else if (project.technicalApproach && project.technicalApproach.length > 20)
-      score += 0.75;
-
-    // 5. Business Case (1 point)
-    if (project.businessModel && project.businessModel.length > 20)
-      score += 0.5;
-    if (
-      project.competitiveLandscape &&
-      project.competitiveLandscape.length > 20
-    )
-      score += 0.25;
-    if (project.futureVision && project.futureVision.length > 20) score += 0.25;
-
-    // 6. Demo/deployment (1.5 points)
-    if (
-      project.liveAppLink ||
-      project.technicalDemoLink ||
-      project.presentationLink
-    ) {
-      score += 1.0;
-      const demoLink =
-        project.liveAppLink ||
-        project.technicalDemoLink ||
-        project.presentationLink ||
-        "";
+    // 3. GitHub repository (3 points)
+    if (project.repoLink) {
+      score += 2.5;
       if (
-        demoLink.includes("vercel") ||
-        demoLink.includes("netlify") ||
-        demoLink.includes("railway") ||
-        demoLink.includes(".app") ||
-        demoLink.includes(".xyz") ||
-        demoLink.includes(".com")
+        !project.repoLink.includes("github.com/user") &&
+        !project.repoLink.includes("github.com/example")
       ) {
         score += 0.5;
       }
     }
 
-    // 7. GitHub repository (1 point)
-    if (project.repoLink) {
-      score += 0.75;
-      if (
-        !project.repoLink.includes("github.com/user") &&
-        !project.repoLink.includes("github.com/example")
-      ) {
-        score += 0.25;
-      }
-    }
-
-    // 8. Video/presentation (1 point)
-    if (project.presentationLink) score += 1.0;
+    // 4. Video/presentation (3 points)
+    if (project.presentationLink) score += 3;
 
     return Math.min(score, 10);
   }
