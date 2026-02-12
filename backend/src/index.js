@@ -2463,6 +2463,17 @@ app.get("/api/forum-activity", async (req, res) => {
   }
 });
 
+// Temporary: trigger voting cycle manually
+app.post("/api/trigger/voting", async (req, res) => {
+  try {
+    logger.info("🗳️ Manual voting trigger!");
+    const result = await agent.votingService.evaluateAndVote();
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============================================
 // ERROR HANDLING
 // ============================================
