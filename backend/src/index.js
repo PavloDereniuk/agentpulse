@@ -1686,6 +1686,8 @@ app.post("/api/evaluate/live", async (req, res) => {
       objectiveScore += 3;
     }
 
+    const demoLink = project.liveAppLink || project.technicalDemoLink || "";
+
     objectiveScore = Math.min(objectiveScore, 10);
 
     logger.info(
