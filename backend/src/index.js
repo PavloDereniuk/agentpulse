@@ -71,6 +71,10 @@ if (process.env.AUTO_POST_ENABLED === "true") {
 // Cache solana status (refresh every 5 min)
 let cachedSolanaStatus = null;
 let lastSolanaCheck = 0;
+let cachedSolanaFullStatus = null;
+let lastFullStatusCheck = 0;
+let cachedAgentWallet = null;
+let lastWalletCheck = 0;
 
 app.get("/health", async (req, res) => {
   try {
@@ -163,18 +167,18 @@ app.get("/api/anchor/stats", async (req, res) => {
  */
 app.get("/api/solana/status", async (req, res) => {
   try {
+    const now = Date.now();
+    if (cachedSolanaFullStatus && now - lastFullStatusCheck < 300000) {
+      return res.json(cachedSolanaFullStatus);
+    }
     let networkStatus = null;
     let walletBalance = null;
-
-    // Try to get network status with timeout
     try {
       networkStatus = await solana.getNetworkStatus();
     } catch (err) {
       logger.warn("Solana network unavailable:", err.message);
       networkStatus = { available: false, error: "Network unavailable" };
     }
-
-    // Try to get wallet balance
     if (solana.canWrite()) {
       try {
         walletBalance = await solana.getAgentWalletBalance();
@@ -183,23 +187,19 @@ app.get("/api/solana/status", async (req, res) => {
         walletBalance = null;
       }
     }
-
-    res.json({
+    cachedSolanaFullStatus = {
       network: networkStatus,
       wallet: walletBalance,
       stats: solana.getStats(),
-    });
+    };
+    lastFullStatusCheck = now;
+    res.json(cachedSolanaFullStatus);
   } catch (error) {
     logger.error("Error getting Solana status:", error?.message || error);
-
-    // Return fallback data instead of 500
     res.json({
       network: { available: false },
       wallet: null,
-      stats: solana.getStats() || {
-        network: "devnet",
-        walletConfigured: false,
-      },
+      stats: solana.getStats() || { network: "mainnet-beta" },
     });
   }
 });
@@ -280,19 +280,23 @@ app.get("/api/solana/agent-wallet", async (req, res) => {
         message: "No wallet configured for agent",
       });
     }
-
+    const now = Date.now();
+    if (cachedAgentWallet && now - lastWalletCheck < 300000) {
+      return res.json(cachedAgentWallet);
+    }
     const [balance, transactions] = await Promise.all([
       solana.getAgentWalletBalance(),
       solana.getRecentTransactions(solana.walletPublicKey, 5),
     ]);
-
-    res.json({
+    cachedAgentWallet = {
       configured: true,
       address: solana.walletPublicKey,
       balance,
       recentTransactions: transactions,
-      explorerUrl: `https://solscan.io/account/${solana.walletPublicKey}?cluster=${solana.network}`,
-    });
+      explorerUrl: `https://solscan.io/account/${solana.walletPublicKey}`,
+    };
+    lastWalletCheck = now;
+    res.json(cachedAgentWallet);
   } catch (error) {
     logger.error("Error getting agent wallet:", error);
     res.status(500).json({ error: error.message });
