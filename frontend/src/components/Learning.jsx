@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Evolution from "./Evolution";
 import "./Learning.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -60,6 +61,11 @@ function Learning() {
           How AgentPulse improves through autonomous decision-making
         </p>
       </div>
+
+      {/* Evolution */}
+      <section className="evolution-section" style={{ marginBottom: "32px" }}>
+        <Evolution />
+      </section>
 
       {/* Key Metrics */}
       <div className="learning-metrics">
@@ -146,52 +152,56 @@ function Learning() {
 
         <div className="timeline">
           {confidenceOverTime
-            .slice(-( showAllTimeline ? confidenceOverTime.length : 5))
+            .slice(-(showAllTimeline ? confidenceOverTime.length : 5))
             .map((period, idx) => {
-            const confidence = (
-              parseFloat(period.avg_confidence) * 100
-            ).toFixed(1);
-            const date = new Date(period.time_bucket);
-            const timeLabel = date.toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              hour12: false,
-            });
+              const confidence = (
+                parseFloat(period.avg_confidence) * 100
+              ).toFixed(1);
+              const date = new Date(period.time_bucket);
+              const timeLabel = date.toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                hour12: false,
+              });
 
-            return (
-              <div key={idx} className="timeline-item">
-                <div className="timeline-dot"></div>
-                <div className="timeline-content">
-                  <div className="timeline-header">
-                    <span className="timeline-time">{timeLabel}</span>
-                    <span className={`timeline-type ${period.action_type}`}>
-                      {period.action_type === "VOTE_CAST"
-                        ? "🗳️ Vote"
-                        : "💬 Comment"}
-                    </span>
-                  </div>
-                  <div className="timeline-stats">
-                    <div className="stat">
-                      <span className="stat-label">Confidence:</span>
-                      <span className="stat-value">{confidence}%</span>
+              return (
+                <div key={idx} className="timeline-item">
+                  <div className="timeline-dot"></div>
+                  <div className="timeline-content">
+                    <div className="timeline-header">
+                      <span className="timeline-time">{timeLabel}</span>
+                      <span className={`timeline-type ${period.action_type}`}>
+                        {period.action_type === "VOTE_CAST"
+                          ? "🗳️ Vote"
+                          : "💬 Comment"}
+                      </span>
                     </div>
-                    <div className="stat">
-                      <span className="stat-label">Actions:</span>
-                      <span className="stat-value">{period.action_count}</span>
+                    <div className="timeline-stats">
+                      <div className="stat">
+                        <span className="stat-label">Confidence:</span>
+                        <span className="stat-value">{confidence}%</span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-label">Actions:</span>
+                        <span className="stat-value">
+                          {period.action_count}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
         {confidenceOverTime.length > 5 && (
-          <button 
+          <button
             className="learning-show-more"
             onClick={() => setShowAllTimeline(!showAllTimeline)}
           >
-            {showAllTimeline ? 'Show latest 5' : `Show all ${confidenceOverTime.length} periods`}
+            {showAllTimeline
+              ? "Show latest 5"
+              : `Show all ${confidenceOverTime.length} periods`}
           </button>
         )}
       </div>
@@ -264,28 +274,33 @@ function Learning() {
             <div className="insight-icon">🎯</div>
             <h3>Consistent High Performance</h3>
             <p>
-              {metrics.highConfidenceRate} of {metrics.totalActions} decisions made with 90-100% confidence, showing strong autonomous capability
+              {metrics.highConfidenceRate} of {metrics.totalActions} decisions
+              made with 90-100% confidence, showing strong autonomous capability
             </p>
           </div>
           <div className="insight-card">
             <div className="insight-icon">📊</div>
             <h3>Multi-Signal Evaluation</h3>
             <p>
-              Combines objective metrics (40%) with AI reasoning (60%) for balanced decision-making
+              Combines objective metrics (40%) with AI reasoning (60%) for
+              balanced decision-making
             </p>
           </div>
           <div className="insight-card">
             <div className="insight-icon">🔄</div>
             <h3>Adaptive Behavior</h3>
             <p>
-              Average confidence of {metrics.averageConfidence}% across {metrics.totalActions} actions, demonstrating nuanced evaluation capability
+              Average confidence of {metrics.averageConfidence}% across{" "}
+              {metrics.totalActions} actions, demonstrating nuanced evaluation
+              capability
             </p>
           </div>
           <div className="insight-card">
             <div className="insight-icon">✅</div>
             <h3>Community Alignment</h3>
             <p>
-              Average project score {avgOurScore.toFixed(1)}/10 correlates with community upvotes, validating evaluation accuracy
+              Average project score {avgOurScore.toFixed(1)}/10 correlates with
+              community upvotes, validating evaluation accuracy
             </p>
           </div>
         </div>

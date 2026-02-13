@@ -9,7 +9,6 @@
 import React, { useState, useEffect } from "react";
 import SolanaActivity from "./components/SolanaActivity";
 import Leaderboard from "./components/Leaderboard";
-import Evolution from "./components/Evolution";
 import Proof from "./components/Proof";
 import Analytics from "./components/Analytics";
 import NetworkGraph from "./components/NetworkGraph";
@@ -308,14 +307,6 @@ function App() {
               style={{ marginBottom: "32px" }}
             >
               <Leaderboard />
-            </section>
-
-            {/* Evolution */}
-            <section
-              className="evolution-section"
-              style={{ marginBottom: "32px" }}
-            >
-              <Evolution />
             </section>
 
             {/* Links Section */}
