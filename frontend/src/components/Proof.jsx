@@ -12,14 +12,31 @@ function ProofOfAutonomy() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [onChainLogs, setOnChainLogs] = useState([]);
   const [expandedProof, setExpandedProof] = useState(null);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   useEffect(() => {
     fetchProofs();
-    const interval = setInterval(fetchProofs, 30000);
+    fetchOnChainLogs();
+    const interval = setInterval(() => {
+      fetchProofs();
+      fetchOnChainLogs();
+    }, 30000);
     return () => clearInterval(interval);
   }, [filter]);
+
+  const fetchOnChainLogs = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/solana/on-chain-logs`);
+      const data = await response.json();
+      if (data.logs || data.onChainLogs) {
+        setOnChainLogs((data.logs || data.onChainLogs).slice(0, 5));
+      }
+    } catch (error) {
+      console.error("Failed to fetch on-chain logs:", error);
+    }
+  };
 
   // Reset visible count when filter changes
   useEffect(() => {
@@ -267,6 +284,32 @@ function ProofOfAutonomy() {
           </div>
         </div>
       </div>
+
+      {/* Recent On-Chain Transactions */}
+      {onChainLogs.length > 0 && (
+        <div className="onchain-txs">
+          <h3>🔗 Recent On-Chain Transactions</h3>
+          <div className="tx-list">
+            {onChainLogs.map((log, i) => (
+              <div key={i} className="tx-item">
+                <div className="tx-type">{log.action}</div>
+                <div className="tx-title">{log.details?.title || ""}</div>
+                <div className="tx-hash">
+                  {(log.details?.solanaTx || "").substring(0, 12)}...
+                </div>
+                <a
+                  href={`https://solscan.io/tx/${log.details?.solanaTx}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tx-link"
+                >
+                  Mainnet ↗
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       {stats && (
