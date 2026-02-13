@@ -227,16 +227,6 @@ function App() {
                       <span className="stat-label">Strategy</span>
                     </div>
                   </div>
-
-                  <div className="stat-card">
-                    <div className="stat-icon">⏱️</div>
-                    <div className="stat-info">
-                      <span className="stat-value">
-                        {formatUptime(agent?.uptime)}
-                      </span>
-                      <span className="stat-label">Uptime</span>
-                    </div>
-                  </div>
                 </div>
               )}
 

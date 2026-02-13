@@ -19,17 +19,23 @@
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.7);
   --text-muted: rgba(255, 255, 255, 0.4);
-  --accent-purple: #9945FF;
-  --accent-cyan: #00D1FF;
-  --accent-green: #14F195;
-  --accent-pink: #FF6B9D;
-  --accent-orange: #FF9F43;
+  --accent-purple: #9945ff;
+  --accent-cyan: #00d1ff;
+  --accent-green: #14f195;
+  --accent-pink: #ff6b9d;
+  --accent-orange: #ff9f43;
   --border-color: rgba(255, 255, 255, 0.1);
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
@@ -44,7 +50,11 @@ body {
 
 /* Header */
 .app-header {
-  background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--bg-secondary) 0%,
+    var(--bg-primary) 100%
+  );
   border-bottom: 1px solid var(--border-color);
   padding: 20px 24px;
   position: sticky;
@@ -75,17 +85,32 @@ body {
 }
 
 @keyframes heartbeat {
-  0%, 100% { transform: scale(1); }
-  15% { transform: scale(1.15); }
-  30% { transform: scale(1); }
-  45% { transform: scale(1.1); }
-  60% { transform: scale(1); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.15);
+  }
+  30% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.1);
+  }
+  60% {
+    transform: scale(1);
+  }
 }
 
 .logo-text h1 {
   font-size: 28px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-purple) 0%,
+    var(--accent-cyan) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -118,7 +143,7 @@ body {
 
 .status-indicator.offline {
   background: rgba(255, 107, 107, 0.15);
-  color: #FF6B6B;
+  color: #ff6b6b;
   border: 1px solid rgba(255, 107, 107, 0.3);
 }
 
@@ -135,7 +160,6 @@ body {
 /* Navigation Tabs */
 
 .nav-tab {
-  
   padding: 12px 24px;
   justify-content: left;
   background: rgba(255, 255, 255, 0.02);
@@ -163,7 +187,7 @@ body {
 }
 
 .nav-tab.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 50%;
@@ -220,7 +244,7 @@ body {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 10px;
 }
 
@@ -229,7 +253,6 @@ body {
     grid-template-columns: repeat(4, 1fr);
   }
 }
-
 
 .stat-card {
   background: var(--bg-card);
@@ -251,7 +274,11 @@ body {
 }
 
 .stat-card.primary {
-  background: linear-gradient(135deg, rgba(153, 69, 255, 0.2) 0%, rgba(0, 209, 255, 0.2) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(153, 69, 255, 0.2) 0%,
+    rgba(0, 209, 255, 0.2) 100%
+  );
   border-color: rgba(153, 69, 255, 0.3);
 }
 
@@ -306,7 +333,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .error-icon {
@@ -343,7 +372,6 @@ body {
     grid-template-columns: 1fr 1fr;
   }
 }
-
 
 /* Autonomous Section */
 .autonomous-card {
@@ -389,8 +417,13 @@ body {
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .status-text {
@@ -410,7 +443,11 @@ body {
 .autonomy-quote {
   margin-top: 20px;
   padding: 16px;
-  background: linear-gradient(135deg, rgba(153, 69, 255, 0.1) 0%, rgba(0, 209, 255, 0.1) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(153, 69, 255, 0.1) 0%,
+    rgba(0, 209, 255, 0.1) 100%
+  );
   border-radius: 10px;
   border-left: 3px solid var(--accent-purple);
 }
@@ -487,7 +524,11 @@ body {
 }
 
 .hackathon-card {
-  background: linear-gradient(135deg, rgba(153, 69, 255, 0.15) 0%, rgba(0, 209, 255, 0.15) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(153, 69, 255, 0.15) 0%,
+    rgba(0, 209, 255, 0.15) 100%
+  );
   border: 1px solid rgba(153, 69, 255, 0.3);
   border-radius: 16px;
   padding: 24px;
@@ -524,7 +565,11 @@ body {
 }
 
 .target-badge.agentic {
-  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-pink) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-purple) 0%,
+    var(--accent-pink) 100%
+  );
   color: white;
 }
 
@@ -562,41 +607,41 @@ body {
   .app-header {
     padding: 16px;
   }
-  
+
   .logo-pulse {
     font-size: 36px;
   }
-  
+
   .logo-text h1 {
     font-size: 22px;
   }
-  
+
   .tagline {
     display: none;
   }
-  
+
   .header-status {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .app-main {
     padding: 20px 16px;
   }
-  
+
   .stat-card {
     padding: 16px;
   }
-  
+
   .stat-value {
     font-size: 22px;
   }
-  
+
   .hackathon-card {
     flex-direction: column;
     text-align: center;
   }
-  
+
   .hackathon-targets {
     justify-content: center;
   }
